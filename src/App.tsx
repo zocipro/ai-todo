@@ -116,7 +116,18 @@ export default function App() {
       : filter === "active"
         ? "进行中的任务已全部完成。"
         : "还没有已完成的任务。";
+<<<<<<< HEAD
+=======
 
+<<<<<<< ours
+<<<<<<< ours
+  const aiInputReady = aiInput.trim().length > 0;
+>>>>>>> 8021cda (test)
+
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
   return (
     <div className="page">
       <header className="hero">

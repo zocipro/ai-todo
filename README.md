@@ -23,3 +23,27 @@ npm run preview
 - Node 版本：18 或 20
 
 无需后端；数据保存在 `localStorage` 中。
+<<<<<<< ours
+<<<<<<< ours
+<<<<<<< HEAD
+=======
+
+## AI 功能配置（豆包大模型）
+
+AI 功能通过 Cloudflare Pages Functions 代理请求豆包接口，避免在前端暴露密钥。
+
+需要配置的环境变量：
+
+- `DOUBAO_API_KEY`：豆包 API Key
+- `DOUBAO_MODEL`：模型名称
+- `DOUBAO_API_BASE_URL`：可选，默认 `https://ark.cn-beijing.volces.com/api/v3`
+
+本地调试建议：
+
+- 使用 `wrangler pages dev` 运行时，在 `.dev.vars` 中填写上述变量。
+- 仅执行 `npm run dev` 只会启动前端页面，`/api/ai-todo` 不会生效。
+>>>>>>> 8021cda (test)
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
