@@ -159,7 +159,7 @@ export default function App() {
         throw new Error(message);
       }
 
-      const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+      const tasks: unknown[] = Array.isArray(data?.tasks) ? data.tasks : [];
       const cleaned = Array.from(
         new Set(
           tasks
