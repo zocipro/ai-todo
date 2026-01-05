@@ -1,15 +1,15 @@
-# AI Todo (Vite + React)
+# AI 待办 (Vite + React)
 
-A lightweight, local-first todo list. The original project was missing the `src/` entry files, so this repo now includes a minimal but complete app that builds cleanly for Cloudflare Pages.
+一款轻量、本地优先的待办清单。原项目缺少 `src/` 入口文件，因此本仓库补齐了一个精简但完整的应用，可在 Cloudflare Pages 上顺利构建。
 
-## Local development
+## 本地开发
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Production build
+## 生产构建
 
 ```bash
 npm run build
@@ -18,8 +18,8 @@ npm run preview
 
 ## Cloudflare Pages
 
-- Build command: `npm run build`
-- Output directory: `dist`
-- Node version: 18 or 20
+- 构建命令：`npm run build`
+- 输出目录：`dist`
+- Node 版本：18 或 20
 
-No backend is required; data is stored in `localStorage`.
+无需后端；数据保存在 `localStorage` 中。

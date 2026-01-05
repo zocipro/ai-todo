@@ -51,8 +51,8 @@ const loadTodos = (): Todo[] => {
 };
 
 const formatDate = (value: number) => {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "long",
     day: "numeric",
   }).format(new Date(value));
 };
@@ -112,33 +112,32 @@ export default function App() {
 
   const emptyMessage =
     totalCount === 0
-      ? "No tasks yet. Add your first focus item above."
+      ? "还没有任务。先在上方添加第一件事项。"
       : filter === "active"
-        ? "All active tasks are complete."
-        : "No completed tasks yet.";
+        ? "进行中的任务已全部完成。"
+        : "还没有已完成的任务。";
 
   return (
     <div className="page">
       <header className="hero">
         <div>
-          <span className="eyebrow">AI Todo</span>
-          <h1>Keep your day calm and on track.</h1>
+          <span className="eyebrow">AI 待办</span>
+          <h1>让一天更从容、更有条理。</h1>
           <p className="subtitle">
-            Capture tasks quickly, review them clearly, and keep everything stored
-            in your browser.
+            快速记录任务，清晰回顾，全部保存在浏览器中。
           </p>
         </div>
         <div className="hero-card">
           <div className="stat">
-            <span>Tasks</span>
+            <span>任务</span>
             <strong>{totalCount}</strong>
           </div>
           <div className="stat">
-            <span>Done</span>
+            <span>已完成</span>
             <strong>{completedCount}</strong>
           </div>
           <div className="stat">
-            <span>Remaining</span>
+            <span>剩余</span>
             <strong>{remainingCount}</strong>
           </div>
         </div>
@@ -149,13 +148,13 @@ export default function App() {
           <input
             type="text"
             name="task"
-            placeholder="Add a task you want to finish today"
+            placeholder="添加今天想完成的任务"
             value={input}
             onChange={(event) => setInput(event.target.value)}
             maxLength={120}
-            aria-label="New task"
+            aria-label="新任务"
           />
-          <button type="submit">Add task</button>
+          <button type="submit">添加任务</button>
         </form>
 
         <div className="filters">
@@ -165,7 +164,7 @@ export default function App() {
             aria-pressed={filter === "all"}
             onClick={() => setFilter("all")}
           >
-            All
+            全部
           </button>
           <button
             type="button"
@@ -173,7 +172,7 @@ export default function App() {
             aria-pressed={filter === "active"}
             onClick={() => setFilter("active")}
           >
-            Active
+            进行中
           </button>
           <button
             type="button"
@@ -181,7 +180,7 @@ export default function App() {
             aria-pressed={filter === "done"}
             onClick={() => setFilter("done")}
           >
-            Done
+            已完成
           </button>
         </div>
 
@@ -196,20 +195,22 @@ export default function App() {
                   checked={todo.done}
                   onChange={() => handleToggle(todo.id)}
                   aria-label={
-                    todo.done ? `Mark ${todo.text} as active` : `Mark ${todo.text} as done`
+                    todo.done
+                      ? `将 ${todo.text} 标记为进行中`
+                      : `将 ${todo.text} 标记为已完成`
                   }
                 />
                 <div className="todo-text">
                   <span className={todo.done ? "done" : ""}>{todo.text}</span>
-                  <span className="todo-meta">Added {formatDate(todo.createdAt)}</span>
+                  <span className="todo-meta">添加于 {formatDate(todo.createdAt)}</span>
                 </div>
                 <div className="todo-actions">
                   <button
                     type="button"
                     onClick={() => handleDelete(todo.id)}
-                    aria-label={`Delete ${todo.text}`}
+                    aria-label={`删除 ${todo.text}`}
                   >
-                    Remove
+                    删除
                   </button>
                 </div>
               </li>
@@ -218,14 +219,14 @@ export default function App() {
         </ul>
 
         <div className="footer">
-          <span>Autosaved locally on this device.</span>
+          <span>已自动保存在本机浏览器中。</span>
           <button
             className="clear"
             type="button"
             onClick={handleClearCompleted}
             disabled={completedCount === 0}
           >
-            Clear completed
+            清除已完成
           </button>
         </div>
       </section>
