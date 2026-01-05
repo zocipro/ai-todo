@@ -57,10 +57,18 @@ const formatDate = (value: number) => {
   }).format(new Date(value));
 };
 
+const normalizeSuggestion = (value: string) =>
+  value.replace(/^[\s\-•\d\.\)\(]+/, "").replace(/\s+/g, " ").trim();
+
 export default function App() {
   const [todos, setTodos] = useState<Todo[]>(() => loadTodos());
   const [input, setInput] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [aiInput, setAiInput] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiStatus, setAiStatus] = useState("");
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
@@ -110,24 +118,116 @@ export default function App() {
     setTodos((prev) => prev.filter((todo) => !todo.done));
   };
 
+  const buildTodos = (items: string[]) => {
+    const existing = new Set(todos.map((todo) => todo.text));
+    const now = Date.now();
+    return items
+      .map((item) => normalizeSuggestion(item))
+      .filter(Boolean)
+      .filter((item) => !existing.has(item))
+      .map((text, index) => ({
+        id: createId(),
+        text,
+        done: false,
+        createdAt: now + index,
+      }));
+  };
+
+  const handleAiGenerate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const prompt = aiInput.trim();
+    if (!prompt || aiLoading) {
+      return;
+    }
+    setAiLoading(true);
+    setAiError("");
+    setAiStatus("正在生成任务建议...");
+
+    try {
+      const response = await fetch("/api/ai-todo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const message =
+          typeof data?.error === "string" ? data.error : "AI 生成失败，请稍后重试。";
+        throw new Error(message);
+      }
+
+      const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+      const cleaned = Array.from(
+        new Set(
+          tasks
+            .filter((task: unknown): task is string => typeof task === "string")
+            .map((task) => normalizeSuggestion(task))
+            .filter(Boolean)
+        )
+      ).slice(0, 12);
+
+      if (cleaned.length === 0) {
+        setAiSuggestions([]);
+        setAiStatus("未生成有效任务，请换个描述再试。");
+        return;
+      }
+
+      setAiSuggestions(cleaned);
+      setAiStatus(`已生成 ${cleaned.length} 条建议。`);
+    } catch (error) {
+      setAiSuggestions([]);
+      setAiStatus("");
+      setAiError(error instanceof Error ? error.message : "AI 生成失败，请稍后重试。");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAiClearInput = () => {
+    setAiInput("");
+    setAiError("");
+    setAiStatus("");
+  };
+
+  const handleAddSuggestion = (task: string) => {
+    const nextTodos = buildTodos([task]);
+    if (nextTodos.length === 0) {
+      setAiStatus("该任务已在清单中。");
+      return;
+    }
+    setTodos((prev) => [...nextTodos, ...prev]);
+    setAiSuggestions((prev) => prev.filter((item) => item !== task));
+    setAiStatus("已添加 1 条到待办。");
+  };
+
+  const handleAddAllSuggestions = () => {
+    const nextTodos = buildTodos(aiSuggestions);
+    if (nextTodos.length === 0) {
+      setAiStatus("建议已存在于清单中。");
+      return;
+    }
+    setTodos((prev) => [...nextTodos, ...prev]);
+    setAiSuggestions([]);
+    setAiStatus(`已添加 ${nextTodos.length} 条到待办。`);
+  };
+
+  const handleClearSuggestions = () => {
+    setAiSuggestions([]);
+    setAiStatus("");
+  };
+
   const emptyMessage =
     totalCount === 0
       ? "还没有任务。先在上方添加第一件事项。"
       : filter === "active"
         ? "进行中的任务已全部完成。"
         : "还没有已完成的任务。";
-<<<<<<< HEAD
-=======
 
-<<<<<<< ours
-<<<<<<< ours
   const aiInputReady = aiInput.trim().length > 0;
->>>>>>> 8021cda (test)
 
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
   return (
     <div className="page">
       <header className="hero">
@@ -155,6 +255,75 @@ export default function App() {
       </header>
 
       <section className="workspace">
+        <div className="ai-panel">
+          <div className="ai-header">
+            <div>
+              <h2>AI 任务助手</h2>
+              <p>描述你的目标，AI 会拆解成可执行的待办清单。</p>
+            </div>
+            <span className="ai-badge">豆包大模型</span>
+          </div>
+
+          <form className="ai-form" onSubmit={handleAiGenerate}>
+            <textarea
+              name="ai-task"
+              placeholder="例如：筹备下周的产品发布会"
+              value={aiInput}
+              onChange={(event) => setAiInput(event.target.value)}
+              maxLength={240}
+              rows={3}
+              aria-label="AI 任务描述"
+            />
+            <div className="ai-actions">
+              <button type="submit" disabled={!aiInputReady || aiLoading}>
+                {aiLoading ? "生成中..." : "AI 生成清单"}
+              </button>
+              <button type="button" className="ghost" onClick={handleAiClearInput}>
+                清空输入
+              </button>
+              <span className="ai-status" role="status" aria-live="polite">
+                {aiStatus}
+              </span>
+            </div>
+          </form>
+
+          {aiError ? (
+            <div className="ai-error" role="alert">
+              {aiError}
+            </div>
+          ) : null}
+
+          {aiSuggestions.length > 0 ? (
+            <div className="ai-suggestions">
+              <div className="ai-suggestions-header">
+                <span>AI 建议清单</span>
+                <div className="ai-suggestions-actions">
+                  <button type="button" onClick={handleAddAllSuggestions}>
+                    全部添加
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={handleClearSuggestions}
+                  >
+                    清空建议
+                  </button>
+                </div>
+              </div>
+              <ul>
+                {aiSuggestions.map((task) => (
+                  <li key={task} className="ai-suggestion">
+                    <span>{task}</span>
+                    <button type="button" onClick={() => handleAddSuggestion(task)}>
+                      添加
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
         <form className="input-row" onSubmit={handleSubmit}>
           <input
             type="text"
