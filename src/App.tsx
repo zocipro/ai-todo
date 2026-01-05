@@ -170,12 +170,24 @@ export default function App() {
         },
         body: JSON.stringify(payload),
       });
-      const data = await response.json().catch(() => null);
+      const rawText = await response.text();
+      let data: { tasks?: unknown; error?: unknown } | null = null;
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = null;
+        }
+      }
 
       if (!response.ok) {
-        const message =
-          typeof data?.error === "string" ? data.error : "AI 生成失败，请稍后重试。";
-        throw new Error(message);
+        const baseMessage =
+          typeof data?.error === "string" ? data.error : `请求失败（${response.status}）`;
+        const hint =
+          response.status === 404
+            ? "未检测到后端 /api/ai-todo，请使用 wrangler pages dev 或部署到 Cloudflare Pages。"
+            : "";
+        throw new Error(hint ? `${baseMessage} ${hint}` : baseMessage);
       }
 
       const tasks: unknown[] = Array.isArray(data?.tasks) ? data.tasks : [];

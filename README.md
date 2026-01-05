@@ -40,3 +40,4 @@ AI 功能通过 Cloudflare Pages Functions 代理请求豆包接口，避免在�
 
 - 使用 `wrangler pages dev` 运行时，在 `.dev.vars` 中填写上述变量。
 - 仅执行 `npm run dev` 只会启动前端页面，`/api/ai-todo` 不会生效。
+- 建议：先执行 `npm run dev`，再另开终端执行 `wrangler pages dev --proxy 5173` 以启用 Functions。
