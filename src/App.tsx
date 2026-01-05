@@ -10,6 +10,7 @@ type Todo = {
 };
 
 const STORAGE_KEY = "ai-todo-items";
+const API_KEY_STORAGE = "ai-todo-api-key";
 
 const createId = () => {
   if (globalThis.crypto && "randomUUID" in globalThis.crypto) {
@@ -69,10 +70,22 @@ export default function App() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [aiStatus, setAiStatus] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyStatus, setApiKeyStatus] = useState("");
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
   }, [todos]);
+
+  useEffect(() => {
+    if (typeof localStorage === "undefined") {
+      return;
+    }
+    const savedKey = localStorage.getItem(API_KEY_STORAGE);
+    if (savedKey) {
+      setApiKey(savedKey);
+    }
+  }, []);
 
   const totalCount = todos.length;
   const completedCount = todos.filter((todo) => todo.done).length;
@@ -144,12 +157,18 @@ export default function App() {
     setAiStatus("正在生成任务建议...");
 
     try {
+      const trimmedKey = apiKey.trim();
+      const payload: Record<string, unknown> = { prompt };
+      if (trimmedKey) {
+        payload.apiKey = trimmedKey;
+      }
+
       const response = await fetch("/api/ai-todo", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json().catch(() => null);
 
@@ -219,6 +238,29 @@ export default function App() {
     setAiStatus("");
   };
 
+  const handleSaveApiKey = () => {
+    if (typeof localStorage === "undefined") {
+      return;
+    }
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      localStorage.removeItem(API_KEY_STORAGE);
+      setApiKeyStatus("已清除 API Key。");
+      return;
+    }
+    localStorage.setItem(API_KEY_STORAGE, trimmed);
+    setApiKey(trimmed);
+    setApiKeyStatus("API Key 已保存在本机浏览器中。");
+  };
+
+  const handleClearApiKey = () => {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(API_KEY_STORAGE);
+    }
+    setApiKey("");
+    setApiKeyStatus("已清除 API Key。");
+  };
+
   const emptyMessage =
     totalCount === 0
       ? "还没有任务。先在上方添加第一件事项。"
@@ -227,6 +269,7 @@ export default function App() {
         : "还没有已完成的任务。";
 
   const aiInputReady = aiInput.trim().length > 0;
+  const hasLocalKey = apiKey.trim().length > 0;
 
   return (
     <div className="page">
@@ -262,6 +305,36 @@ export default function App() {
               <p>描述你的目标，AI 会拆解成可执行的待办清单。</p>
             </div>
             <span className="ai-badge">豆包大模型</span>
+          </div>
+
+          <div className="ai-key">
+            <div className="ai-key-header">
+              <span>API Key</span>
+              <span className={`ai-key-indicator ${hasLocalKey ? "ready" : ""}`}>
+                {hasLocalKey ? "已保存" : "未保存"}
+              </span>
+            </div>
+            <div className="ai-key-row">
+              <input
+                type="password"
+                name="api-key"
+                placeholder="粘贴豆包 API Key"
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
+                autoComplete="off"
+                aria-label="豆包 API Key"
+              />
+              <button type="button" onClick={handleSaveApiKey}>
+                保存
+              </button>
+              <button type="button" className="ghost" onClick={handleClearApiKey}>
+                清除
+              </button>
+            </div>
+            <p className="ai-key-help">
+              密钥仅保存在本机浏览器中，未填写时将使用服务器环境变量。
+            </p>
+            {apiKeyStatus ? <span className="ai-key-status">{apiKeyStatus}</span> : null}
           </div>
 
           <form className="ai-form" onSubmit={handleAiGenerate}>

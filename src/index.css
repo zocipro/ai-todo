@@ -111,6 +111,260 @@ h1 {
   gap: 20px;
 }
 
+.ai-panel {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-key {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.ai-key-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.ai-key-indicator {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--muted);
+}
+
+.ai-key-indicator.ready {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.ai-key-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ai-key-row input {
+  flex: 1 1 240px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  background: #ffffff;
+}
+
+.ai-key-row input:focus {
+  outline: 2px solid rgba(14, 165, 163, 0.35);
+  border-color: rgba(14, 165, 163, 0.55);
+}
+
+.ai-key-row button {
+  border: none;
+  border-radius: 12px;
+  padding: 9px 14px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-key-help {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.ai-key-status {
+  font-size: 0.85rem;
+  color: var(--accent-strong);
+}
+
+.ai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ai-header h2 {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+}
+
+.ai-header p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 46ch;
+  line-height: 1.5;
+}
+
+.ai-badge {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-form textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  font-size: 1rem;
+  background: #ffffff;
+  resize: vertical;
+  min-height: 96px;
+}
+
+.ai-form textarea:focus {
+  outline: 2px solid rgba(14, 165, 163, 0.35);
+  border-color: rgba(14, 165, 163, 0.55);
+}
+
+.ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-actions button {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(14, 165, 163, 0.2);
+}
+
+.ai-panel .ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--accent-strong);
+  box-shadow: none;
+}
+
+.ai-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ai-status {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.ai-error {
+  border: 1px solid rgba(180, 35, 24, 0.25);
+  background: rgba(180, 35, 24, 0.08);
+  color: #b42318;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.ai-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-suggestions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-weight: 600;
+}
+
+.ai-suggestions-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-suggestions-actions button {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-suggestions-actions .ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--accent-strong);
+}
+
+.ai-suggestions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border);
+}
+
+.ai-suggestion span {
+  flex: 1;
+}
+
+.ai-suggestion button {
+  border: none;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ai-suggestion button:hover {
+  background: rgba(14, 165, 163, 0.2);
+}
+
 .input-row {
   display: flex;
   gap: 12px;

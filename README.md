@@ -26,13 +26,15 @@ npm run preview
 
 ## AI 功能配置（豆包大模型）
 
-AI 功能通过 Cloudflare Pages Functions 代理请求豆包接口，避免在前端暴露密钥。
+AI 功能通过 Cloudflare Pages Functions 代理请求豆包接口，避免在前端暴露密钥。默认模型为 `doubao-seed-1-8-251228`，可通过环境变量覆盖。
 
 需要配置的环境变量：
 
-- `DOUBAO_API_KEY`：豆包 API Key
-- `DOUBAO_MODEL`：模型名称
+- `DOUBAO_API_KEY`：豆包 API Key（或使用 `ARK_API_KEY`）
+- `DOUBAO_MODEL`：模型名称（可选，默认 `doubao-seed-1-8-251228`）
 - `DOUBAO_API_BASE_URL`：可选，默认 `https://ark.cn-beijing.volces.com/api/v3`
+
+页面支持直接填写 API Key，密钥仅保存在本机浏览器中，未填写时将使用服务器环境变量。
 
 本地调试建议：
 
