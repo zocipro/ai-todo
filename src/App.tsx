@@ -89,6 +89,20 @@ const MoonIcon = () => (
   </svg>
 );
 
+const SettingsIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
 export default function App() {
   const [todos, setTodos] = useState<Todo[]>(() => loadTodos());
   const [input, setInput] = useState("");
@@ -101,6 +115,7 @@ export default function App() {
   const [apiKey, setApiKey] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -344,6 +359,13 @@ export default function App() {
           <div className="nav-right">
             <button
               className="theme-toggle"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="设置"
+            >
+              <SettingsIcon />
+            </button>
+            <button
+              className="theme-toggle"
               onClick={toggleTheme}
               aria-label="切换主题"
             >
@@ -354,131 +376,146 @@ export default function App() {
         </div>
       </nav>
 
-      <div className="page">
-        <header className="hero">
-          <div>
-            <span className="eyebrow">AI 驱动</span>
-            <h1>让一天更从容、更有条理。</h1>
-            <p className="subtitle">
-              快速记录任务，清晰回顾，全部保存在浏览器中。
-            </p>
+      {/* 设置弹窗 */}
+      {settingsOpen ? (
+        <div className="modal-overlay" onClick={() => setSettingsOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>设置</h2>
+              <button
+                className="modal-close"
+                onClick={() => setSettingsOpen(false)}
+                aria-label="关闭设置"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="ai-panel">
+                <div className="ai-header">
+                  <div>
+                    <h2>AI 任务助手</h2>
+                    <p>描述你的目标，AI 会拆解成可执行的待办清单。</p>
+                  </div>
+                  <span className="ai-badge">豆包大模型</span>
+                </div>
+
+                <div className="ai-key">
+                  <div className="ai-key-header">
+                    <span>API Key</span>
+                    <span className={`ai-key-indicator ${hasLocalKey ? "ready" : ""}`}>
+                      {hasLocalKey ? "已保存" : "未保存"}
+                    </span>
+                  </div>
+                  <div className="ai-key-row">
+                    <input
+                      type="password"
+                      name="api-key"
+                      placeholder="粘贴豆包 API Key"
+                      value={apiKey}
+                      onChange={(event) => setApiKey(event.target.value)}
+                      autoComplete="off"
+                      aria-label="豆包 API Key"
+                    />
+                    <button type="button" onClick={handleSaveApiKey}>
+                      保存
+                    </button>
+                    <button type="button" className="ghost" onClick={handleClearApiKey}>
+                      清除
+                    </button>
+                  </div>
+                  <p className="ai-key-help">
+                    密钥仅保存在本机浏览器中，未填写时将使用服务器环境变量。
+                  </p>
+                  {apiKeyStatus ? <span className="ai-key-status">{apiKeyStatus}</span> : null}
+                </div>
+
+                <form className="ai-form" onSubmit={handleAiGenerate}>
+                  <textarea
+                    name="ai-task"
+                    placeholder="例如：筹备下周的产品发布会"
+                    value={aiInput}
+                    onChange={(event) => setAiInput(event.target.value)}
+                    maxLength={240}
+                    rows={3}
+                    aria-label="AI 任务描述"
+                  />
+                  <div className="ai-actions">
+                    <button type="submit" disabled={!aiInputReady || aiLoading}>
+                      {aiLoading ? "生成中..." : "AI 生成清单"}
+                    </button>
+                    <button type="button" className="ghost" onClick={handleAiClearInput}>
+                      清空输入
+                    </button>
+                    <span className="ai-status" role="status" aria-live="polite">
+                      {aiStatus}
+                    </span>
+                  </div>
+                </form>
+
+                {aiError ? (
+                  <div className="ai-error" role="alert">
+                    {aiError}
+                  </div>
+                ) : null}
+
+                {aiSuggestions.length > 0 ? (
+                  <div className="ai-suggestions">
+                    <div className="ai-suggestions-header">
+                      <span>AI 建议清单</span>
+                      <div className="ai-suggestions-actions">
+                        <button type="button" onClick={handleAddAllSuggestions}>
+                          全部添加
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={handleClearSuggestions}
+                        >
+                          清空建议
+                        </button>
+                      </div>
+                    </div>
+                    <ul>
+                      {aiSuggestions.map((task) => (
+                        <li key={task} className="ai-suggestion">
+                          <span>{task}</span>
+                          <button type="button" onClick={() => handleAddSuggestion(task)}>
+                            添加
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
-          <div className="hero-card">
-            <div className="stat">
-              <span>任务</span>
-              <strong>{totalCount}</strong>
-            </div>
-            <div className="stat">
-              <span>已完成</span>
-              <strong>{completedCount}</strong>
-            </div>
-            <div className="stat">
-              <span>剩余</span>
-              <strong>{remainingCount}</strong>
+        </div>
+      ) : null}
+
+      <div className="page">
+        <header className="hero hero-compact">
+          <div className="hero-stats-inline">
+            <span className="eyebrow">AI 驱动</span>
+            <div className="stats-row">
+              <div className="stat-inline">
+                <span>任务</span>
+                <strong>{totalCount}</strong>
+              </div>
+              <div className="stat-inline">
+                <span>已完成</span>
+                <strong>{completedCount}</strong>
+              </div>
+              <div className="stat-inline">
+                <span>剩余</span>
+                <strong>{remainingCount}</strong>
+              </div>
             </div>
           </div>
         </header>
 
         <section className="workspace">
-          <div className="ai-panel">
-            <div className="ai-header">
-              <div>
-                <h2>AI 任务助手</h2>
-                <p>描述你的目标，AI 会拆解成可执行的待办清单。</p>
-              </div>
-              <span className="ai-badge">豆包大模型</span>
-            </div>
-
-            <div className="ai-key">
-              <div className="ai-key-header">
-                <span>API Key</span>
-                <span className={`ai-key-indicator ${hasLocalKey ? "ready" : ""}`}>
-                  {hasLocalKey ? "已保存" : "未保存"}
-                </span>
-              </div>
-              <div className="ai-key-row">
-                <input
-                  type="password"
-                  name="api-key"
-                  placeholder="粘贴豆包 API Key"
-                  value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
-                  autoComplete="off"
-                  aria-label="豆包 API Key"
-                />
-                <button type="button" onClick={handleSaveApiKey}>
-                  保存
-                </button>
-                <button type="button" className="ghost" onClick={handleClearApiKey}>
-                  清除
-                </button>
-              </div>
-              <p className="ai-key-help">
-                密钥仅保存在本机浏览器中，未填写时将使用服务器环境变量。
-              </p>
-              {apiKeyStatus ? <span className="ai-key-status">{apiKeyStatus}</span> : null}
-            </div>
-
-            <form className="ai-form" onSubmit={handleAiGenerate}>
-              <textarea
-                name="ai-task"
-                placeholder="例如：筹备下周的产品发布会"
-                value={aiInput}
-                onChange={(event) => setAiInput(event.target.value)}
-                maxLength={240}
-                rows={3}
-                aria-label="AI 任务描述"
-              />
-              <div className="ai-actions">
-                <button type="submit" disabled={!aiInputReady || aiLoading}>
-                  {aiLoading ? "生成中..." : "AI 生成清单"}
-                </button>
-                <button type="button" className="ghost" onClick={handleAiClearInput}>
-                  清空输入
-                </button>
-                <span className="ai-status" role="status" aria-live="polite">
-                  {aiStatus}
-                </span>
-              </div>
-            </form>
-
-            {aiError ? (
-              <div className="ai-error" role="alert">
-                {aiError}
-              </div>
-            ) : null}
-
-            {aiSuggestions.length > 0 ? (
-              <div className="ai-suggestions">
-                <div className="ai-suggestions-header">
-                  <span>AI 建议清单</span>
-                  <div className="ai-suggestions-actions">
-                    <button type="button" onClick={handleAddAllSuggestions}>
-                      全部添加
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={handleClearSuggestions}
-                    >
-                      清空建议
-                    </button>
-                  </div>
-                </div>
-                <ul>
-                  {aiSuggestions.map((task) => (
-                    <li key={task} className="ai-suggestion">
-                      <span>{task}</span>
-                      <button type="button" onClick={() => handleAddSuggestion(task)}>
-                        添加
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-
           <form className="input-row" onSubmit={handleSubmit}>
             <input
               type="text"
@@ -489,7 +526,7 @@ export default function App() {
               maxLength={120}
               aria-label="新任务"
             />
-            <button type="submit">添加任务</button>
+            <button type="submit">添加</button>
           </form>
 
           <div className="filters">
