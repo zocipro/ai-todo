@@ -9,8 +9,11 @@ type Todo = {
   createdAt: number;
 };
 
+type Theme = "dark" | "light";
+
 const STORAGE_KEY = "ai-todo-items";
 const API_KEY_STORAGE = "ai-todo-api-key";
+const THEME_STORAGE = "ai-todo-theme";
 
 const createId = () => {
   if (globalThis.crypto && "randomUUID" in globalThis.crypto) {
@@ -51,6 +54,19 @@ const loadTodos = (): Todo[] => {
   }
 };
 
+const getPreferredTheme = (): Theme => {
+  if (typeof localStorage !== "undefined") {
+    const stored = localStorage.getItem(THEME_STORAGE);
+    if (stored === "dark" || stored === "light") {
+      return stored;
+    }
+  }
+  if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: light)").matches) {
+    return "light";
+  }
+  return "dark";
+};
+
 const formatDate = (value: number) => {
   return new Intl.DateTimeFormat("zh-CN", {
     month: "long",
@@ -60,6 +76,18 @@ const formatDate = (value: number) => {
 
 const normalizeSuggestion = (value: string) =>
   value.replace(/^[\s\-•\d\.\)\(]+/, "").replace(/\s+/g, " ").trim();
+
+const SunIcon = () => (
+  <svg className="icon-sun" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z" />
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg className="icon-moon" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z" />
+  </svg>
+);
 
 export default function App() {
   const [todos, setTodos] = useState<Todo[]>(() => loadTodos());
@@ -72,6 +100,12 @@ export default function App() {
   const [aiStatus, setAiStatus] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
+  const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_STORAGE, theme);
+  }, [theme]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
@@ -86,6 +120,10 @@ export default function App() {
       setApiKey(savedKey);
     }
   }, []);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
 
   const totalCount = todos.length;
   const completedCount = todos.filter((todo) => todo.done).length;
@@ -284,217 +322,250 @@ export default function App() {
   const hasLocalKey = apiKey.trim().length > 0;
 
   return (
-    <div className="page">
-      <header className="hero">
-        <div>
-          <span className="eyebrow">AI 待办</span>
-          <h1>让一天更从容、更有条理。</h1>
-          <p className="subtitle">
-            快速记录任务，清晰回顾，全部保存在浏览器中。
-          </p>
-        </div>
-        <div className="hero-card">
-          <div className="stat">
-            <span>任务</span>
-            <strong>{totalCount}</strong>
-          </div>
-          <div className="stat">
-            <span>已完成</span>
-            <strong>{completedCount}</strong>
-          </div>
-          <div className="stat">
-            <span>剩余</span>
-            <strong>{remainingCount}</strong>
-          </div>
-        </div>
-      </header>
+    <>
+      <div className="bg-animated" />
 
-      <section className="workspace">
-        <div className="ai-panel">
-          <div className="ai-header">
-            <div>
-              <h2>AI 任务助手</h2>
-              <p>描述你的目标，AI 会拆解成可执行的待办清单。</p>
-            </div>
-            <span className="ai-badge">豆包大模型</span>
-          </div>
-
-          <div className="ai-key">
-            <div className="ai-key-header">
-              <span>API Key</span>
-              <span className={`ai-key-indicator ${hasLocalKey ? "ready" : ""}`}>
-                {hasLocalKey ? "已保存" : "未保存"}
-              </span>
-            </div>
-            <div className="ai-key-row">
-              <input
-                type="password"
-                name="api-key"
-                placeholder="粘贴豆包 API Key"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                autoComplete="off"
-                aria-label="豆包 API Key"
+      <nav className="navbar">
+        <div className="nav-container">
+          <div className="nav-logo">
+            <svg viewBox="0 0 64 64" fill="none">
+              <rect width="64" height="64" rx="14" fill="currentColor" opacity="0.15" />
+              <path
+                d="M18 34l10 10 18-22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
-              <button type="button" onClick={handleSaveApiKey}>
-                保存
-              </button>
-              <button type="button" className="ghost" onClick={handleClearApiKey}>
-                清除
-              </button>
-            </div>
-            <p className="ai-key-help">
-              密钥仅保存在本机浏览器中，未填写时将使用服务器环境变量。
+            </svg>
+            <span>AI 待办</span>
+          </div>
+          <div className="nav-right">
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label="切换主题"
+            >
+              <SunIcon />
+              <MoonIcon />
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <div className="page">
+        <header className="hero">
+          <div>
+            <span className="eyebrow">AI 驱动</span>
+            <h1>让一天更从容、更有条理。</h1>
+            <p className="subtitle">
+              快速记录任务，清晰回顾，全部保存在浏览器中。
             </p>
-            {apiKeyStatus ? <span className="ai-key-status">{apiKeyStatus}</span> : null}
+          </div>
+          <div className="hero-card">
+            <div className="stat">
+              <span>任务</span>
+              <strong>{totalCount}</strong>
+            </div>
+            <div className="stat">
+              <span>已完成</span>
+              <strong>{completedCount}</strong>
+            </div>
+            <div className="stat">
+              <span>剩余</span>
+              <strong>{remainingCount}</strong>
+            </div>
+          </div>
+        </header>
+
+        <section className="workspace">
+          <div className="ai-panel">
+            <div className="ai-header">
+              <div>
+                <h2>AI 任务助手</h2>
+                <p>描述你的目标，AI 会拆解成可执行的待办清单。</p>
+              </div>
+              <span className="ai-badge">豆包大模型</span>
+            </div>
+
+            <div className="ai-key">
+              <div className="ai-key-header">
+                <span>API Key</span>
+                <span className={`ai-key-indicator ${hasLocalKey ? "ready" : ""}`}>
+                  {hasLocalKey ? "已保存" : "未保存"}
+                </span>
+              </div>
+              <div className="ai-key-row">
+                <input
+                  type="password"
+                  name="api-key"
+                  placeholder="粘贴豆包 API Key"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  autoComplete="off"
+                  aria-label="豆包 API Key"
+                />
+                <button type="button" onClick={handleSaveApiKey}>
+                  保存
+                </button>
+                <button type="button" className="ghost" onClick={handleClearApiKey}>
+                  清除
+                </button>
+              </div>
+              <p className="ai-key-help">
+                密钥仅保存在本机浏览器中，未填写时将使用服务器环境变量。
+              </p>
+              {apiKeyStatus ? <span className="ai-key-status">{apiKeyStatus}</span> : null}
+            </div>
+
+            <form className="ai-form" onSubmit={handleAiGenerate}>
+              <textarea
+                name="ai-task"
+                placeholder="例如：筹备下周的产品发布会"
+                value={aiInput}
+                onChange={(event) => setAiInput(event.target.value)}
+                maxLength={240}
+                rows={3}
+                aria-label="AI 任务描述"
+              />
+              <div className="ai-actions">
+                <button type="submit" disabled={!aiInputReady || aiLoading}>
+                  {aiLoading ? "生成中..." : "AI 生成清单"}
+                </button>
+                <button type="button" className="ghost" onClick={handleAiClearInput}>
+                  清空输入
+                </button>
+                <span className="ai-status" role="status" aria-live="polite">
+                  {aiStatus}
+                </span>
+              </div>
+            </form>
+
+            {aiError ? (
+              <div className="ai-error" role="alert">
+                {aiError}
+              </div>
+            ) : null}
+
+            {aiSuggestions.length > 0 ? (
+              <div className="ai-suggestions">
+                <div className="ai-suggestions-header">
+                  <span>AI 建议清单</span>
+                  <div className="ai-suggestions-actions">
+                    <button type="button" onClick={handleAddAllSuggestions}>
+                      全部添加
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={handleClearSuggestions}
+                    >
+                      清空建议
+                    </button>
+                  </div>
+                </div>
+                <ul>
+                  {aiSuggestions.map((task) => (
+                    <li key={task} className="ai-suggestion">
+                      <span>{task}</span>
+                      <button type="button" onClick={() => handleAddSuggestion(task)}>
+                        添加
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
 
-          <form className="ai-form" onSubmit={handleAiGenerate}>
-            <textarea
-              name="ai-task"
-              placeholder="例如：筹备下周的产品发布会"
-              value={aiInput}
-              onChange={(event) => setAiInput(event.target.value)}
-              maxLength={240}
-              rows={3}
-              aria-label="AI 任务描述"
+          <form className="input-row" onSubmit={handleSubmit}>
+            <input
+              type="text"
+              name="task"
+              placeholder="添加今天想完成的任务"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              maxLength={120}
+              aria-label="新任务"
             />
-            <div className="ai-actions">
-              <button type="submit" disabled={!aiInputReady || aiLoading}>
-                {aiLoading ? "生成中..." : "AI 生成清单"}
-              </button>
-              <button type="button" className="ghost" onClick={handleAiClearInput}>
-                清空输入
-              </button>
-              <span className="ai-status" role="status" aria-live="polite">
-                {aiStatus}
-              </span>
-            </div>
+            <button type="submit">添加任务</button>
           </form>
 
-          {aiError ? (
-            <div className="ai-error" role="alert">
-              {aiError}
-            </div>
-          ) : null}
+          <div className="filters">
+            <button
+              type="button"
+              className={filter === "all" ? "active" : ""}
+              aria-pressed={filter === "all"}
+              onClick={() => setFilter("all")}
+            >
+              全部
+            </button>
+            <button
+              type="button"
+              className={filter === "active" ? "active" : ""}
+              aria-pressed={filter === "active"}
+              onClick={() => setFilter("active")}
+            >
+              进行中
+            </button>
+            <button
+              type="button"
+              className={filter === "done" ? "active" : ""}
+              aria-pressed={filter === "done"}
+              onClick={() => setFilter("done")}
+            >
+              已完成
+            </button>
+          </div>
 
-          {aiSuggestions.length > 0 ? (
-            <div className="ai-suggestions">
-              <div className="ai-suggestions-header">
-                <span>AI 建议清单</span>
-                <div className="ai-suggestions-actions">
-                  <button type="button" onClick={handleAddAllSuggestions}>
-                    全部添加
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={handleClearSuggestions}
-                  >
-                    清空建议
-                  </button>
-                </div>
-              </div>
-              <ul>
-                {aiSuggestions.map((task) => (
-                  <li key={task} className="ai-suggestion">
-                    <span>{task}</span>
-                    <button type="button" onClick={() => handleAddSuggestion(task)}>
-                      添加
+          <ul className="list">
+            {visibleTodos.length === 0 ? (
+              <li className="empty">{emptyMessage}</li>
+            ) : (
+              visibleTodos.map((todo) => (
+                <li key={todo.id} className="todo">
+                  <input
+                    type="checkbox"
+                    checked={todo.done}
+                    onChange={() => handleToggle(todo.id)}
+                    aria-label={
+                      todo.done
+                        ? `将 ${todo.text} 标记为进行中`
+                        : `将 ${todo.text} 标记为已完成`
+                    }
+                  />
+                  <div className="todo-text">
+                    <span className={todo.done ? "done" : ""}>{todo.text}</span>
+                    <span className="todo-meta">添加于 {formatDate(todo.createdAt)}</span>
+                  </div>
+                  <div className="todo-actions">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(todo.id)}
+                      aria-label={`删除 ${todo.text}`}
+                    >
+                      删除
                     </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
+                  </div>
+                </li>
+              ))
+            )}
+          </ul>
 
-        <form className="input-row" onSubmit={handleSubmit}>
-          <input
-            type="text"
-            name="task"
-            placeholder="添加今天想完成的任务"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            maxLength={120}
-            aria-label="新任务"
-          />
-          <button type="submit">添加任务</button>
-        </form>
-
-        <div className="filters">
-          <button
-            type="button"
-            className={filter === "all" ? "active" : ""}
-            aria-pressed={filter === "all"}
-            onClick={() => setFilter("all")}
-          >
-            全部
-          </button>
-          <button
-            type="button"
-            className={filter === "active" ? "active" : ""}
-            aria-pressed={filter === "active"}
-            onClick={() => setFilter("active")}
-          >
-            进行中
-          </button>
-          <button
-            type="button"
-            className={filter === "done" ? "active" : ""}
-            aria-pressed={filter === "done"}
-            onClick={() => setFilter("done")}
-          >
-            已完成
-          </button>
-        </div>
-
-        <ul className="list">
-          {visibleTodos.length === 0 ? (
-            <li className="empty">{emptyMessage}</li>
-          ) : (
-            visibleTodos.map((todo) => (
-              <li key={todo.id} className="todo">
-                <input
-                  type="checkbox"
-                  checked={todo.done}
-                  onChange={() => handleToggle(todo.id)}
-                  aria-label={
-                    todo.done
-                      ? `将 ${todo.text} 标记为进行中`
-                      : `将 ${todo.text} 标记为已完成`
-                  }
-                />
-                <div className="todo-text">
-                  <span className={todo.done ? "done" : ""}>{todo.text}</span>
-                  <span className="todo-meta">添加于 {formatDate(todo.createdAt)}</span>
-                </div>
-                <div className="todo-actions">
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(todo.id)}
-                    aria-label={`删除 ${todo.text}`}
-                  >
-                    删除
-                  </button>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
-
-        <div className="footer">
-          <span>已自动保存在本机浏览器中。</span>
-          <button
-            className="clear"
-            type="button"
-            onClick={handleClearCompleted}
-            disabled={completedCount === 0}
-          >
-            清除已完成
-          </button>
-        </div>
-      </section>
-    </div>
+          <div className="footer">
+            <span>已自动保存在本机浏览器中。</span>
+            <button
+              className="clear"
+              type="button"
+              onClick={handleClearCompleted}
+              disabled={completedCount === 0}
+            >
+              清除已完成
+            </button>
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
