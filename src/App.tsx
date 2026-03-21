@@ -531,11 +531,23 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json().catch(() => null);
+      const contentType = response.headers.get("content-type") || "";
+      let data: Record<string, unknown> | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json().catch(() => null);
+      }
 
       if (!response.ok) {
-        const msg = typeof data?.error === "string" ? data.error : `语音合成失败（${response.status}）`;
-        const hint = typeof data?.hint === "string" ? `\n${data.hint}` : "";
+        // If backend returned non-JSON (e.g. HTML 404/502 from dev server)
+        if (!data) {
+          if (response.status === 404) {
+            throw new Error("TTS 接口不存在。请使用 wrangler pages dev 启动开发服务器，或部署到 Cloudflare Pages。");
+          }
+          throw new Error(`语音合成失败（${response.status}）。请确认后端 /api/tts 已正确部署。`);
+        }
+        const msg = typeof data.error === "string" ? data.error : `语音合成失败（${response.status}）`;
+        const hint = typeof data.hint === "string" ? ` ${data.hint}` : "";
         throw new Error(msg + hint);
       }
 
