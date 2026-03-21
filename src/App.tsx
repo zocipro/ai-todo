@@ -495,9 +495,8 @@ export default function App() {
       ) : null}
 
       <div className="page">
-        <header className="hero hero-compact">
-          <div className="hero-stats-inline">
-            <span className="eyebrow">AI 驱动</span>
+        <section className="workspace">
+          <div className="workspace-header">
             <div className="stats-row">
               <div className="stat-inline">
                 <span>任务</span>
@@ -513,9 +512,7 @@ export default function App() {
               </div>
             </div>
           </div>
-        </header>
 
-        <section className="workspace">
           <form className="input-row" onSubmit={handleSubmit}>
             <input
               type="text"
