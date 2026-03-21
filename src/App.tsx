@@ -535,7 +535,8 @@ export default function App() {
 
       if (!response.ok) {
         const msg = typeof data?.error === "string" ? data.error : `语音合成失败（${response.status}）`;
-        throw new Error(msg);
+        const hint = typeof data?.hint === "string" ? `\n${data.hint}` : "";
+        throw new Error(msg + hint);
       }
 
       if (!data?.audio) {
