@@ -1099,6 +1099,112 @@ body {
   cursor: not-allowed;
 }
 
+/* === TTS === */
+.tts-panel {
+  border-top: 1px solid var(--glass-border);
+  margin-top: 8px;
+  padding-top: 18px;
+}
+
+.tts-badge {
+  background: rgba(236, 72, 153, 0.12) !important;
+  border-color: rgba(236, 72, 153, 0.25) !important;
+  color: #f472b6 !important;
+}
+
+.tts-style-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tts-style-section label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.tts-style-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tts-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.tts-btn:hover {
+  color: var(--accent);
+  background: rgba(167, 139, 250, 0.12);
+}
+
+.tts-btn.playing {
+  color: #f472b6;
+  animation: ttsPulse 1.2s ease-in-out infinite;
+}
+
+.tts-btn:disabled {
+  cursor: wait;
+}
+
+@keyframes ttsPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.tts-loading {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--text-tertiary);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ttsSpinner 0.6s linear infinite;
+}
+
+@keyframes ttsSpinner {
+  to { transform: rotate(360deg); }
+}
+
+.tts-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+  font-size: 0.85rem;
+}
+
+.tts-error button {
+  border: none;
+  background: transparent;
+  color: var(--error-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background var(--transition-fast);
+}
+
+.tts-error button:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
 /* === Settings Modal === */
 .modal-overlay {
   position: fixed;

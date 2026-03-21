@@ -19,7 +19,18 @@ type Todo = {
 
 const STORAGE_KEY = "ai-todo-items";
 const API_KEY_STORAGE = "ai-todo-api-key";
+const MIMO_KEY_STORAGE = "ai-todo-mimo-key";
+const TTS_STYLE_STORAGE = "ai-todo-tts-style";
 const THEME_STORAGE = "ai-todo-theme";
+
+const TTS_STYLES = [
+  { value: "", label: "自然朗读" },
+  { value: "温柔轻声", label: "温柔轻声" },
+  { value: "激昂慷慨如演讲", label: "激昂演讲" },
+  { value: "活泼可爱", label: "活泼可爱" },
+  { value: "沉稳冷静", label: "沉稳冷静" },
+  { value: "困倦略带沙哑", label: "慵懒沙哑" },
+] as const;
 
 const PRIORITY_LABELS: Record<Priority, string> = {
   high: "高",
@@ -162,6 +173,20 @@ const DragIcon = () => (
   </svg>
 );
 
+const SpeakerIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+  </svg>
+);
+
+const StopIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 16, height: 16 }}>
+    <rect x="6" y="6" width="12" height="12" rx="2" />
+  </svg>
+);
+
 export default function App() {
   const [todos, setTodos] = useState<Todo[]>(() => loadTodos());
   const [input, setInput] = useState("");
@@ -180,6 +205,13 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showAddOptions, setShowAddOptions] = useState(false);
+  const [mimoKey, setMimoKey] = useState("");
+  const [mimoKeyStatus, setMimoKeyStatus] = useState("");
+  const [ttsStyle, setTtsStyle] = useState("");
+  const [ttsLoadingId, setTtsLoadingId] = useState<string | null>(null);
+  const [ttsError, setTtsError] = useState("");
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [ttsPlayingId, setTtsPlayingId] = useState<string | null>(null);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -199,6 +231,14 @@ export default function App() {
     const savedKey = localStorage.getItem(API_KEY_STORAGE);
     if (savedKey) {
       setApiKey(savedKey);
+    }
+    const savedMimoKey = localStorage.getItem(MIMO_KEY_STORAGE);
+    if (savedMimoKey) {
+      setMimoKey(savedMimoKey);
+    }
+    const savedStyle = localStorage.getItem(TTS_STYLE_STORAGE);
+    if (savedStyle !== null) {
+      setTtsStyle(savedStyle);
     }
   }, []);
 
@@ -426,6 +466,106 @@ export default function App() {
     setApiKeyStatus("API Key 已保存在本机浏览器中。");
   };
 
+  // TTS handlers
+  const handleSaveMimoKey = () => {
+    if (typeof localStorage === "undefined") return;
+    const trimmed = mimoKey.trim();
+    if (!trimmed) {
+      localStorage.removeItem(MIMO_KEY_STORAGE);
+      setMimoKeyStatus("已清除 MiMo API Key。");
+      return;
+    }
+    localStorage.setItem(MIMO_KEY_STORAGE, trimmed);
+    setMimoKey(trimmed);
+    setMimoKeyStatus("MiMo API Key 已保存。");
+  };
+
+  const handleClearMimoKey = () => {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(MIMO_KEY_STORAGE);
+    }
+    setMimoKey("");
+    setMimoKeyStatus("已清除 MiMo API Key。");
+  };
+
+  const handleTtsStyleChange = (style: string) => {
+    setTtsStyle(style);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(TTS_STYLE_STORAGE, style);
+    }
+  };
+
+  const handleTtsStop = () => {
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+    setTtsPlayingId(null);
+  };
+
+  const handleTtsSpeak = async (todoId: string, text: string) => {
+    // If already playing this one, stop it
+    if (ttsPlayingId === todoId) {
+      handleTtsStop();
+      return;
+    }
+    // Stop any current playback
+    handleTtsStop();
+
+    setTtsLoadingId(todoId);
+    setTtsError("");
+
+    try {
+      const payload: Record<string, unknown> = { text };
+      const trimmedKey = mimoKey.trim();
+      if (trimmedKey) {
+        payload.apiKey = trimmedKey;
+      }
+      if (ttsStyle) {
+        payload.style = ttsStyle;
+      }
+
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const msg = typeof data?.error === "string" ? data.error : `语音合成失败（${response.status}）`;
+        throw new Error(msg);
+      }
+
+      if (!data?.audio) {
+        throw new Error("未收到音频数据。");
+      }
+
+      // Play base64 wav audio
+      const audioSrc = `data:audio/wav;base64,${data.audio}`;
+      const audio = new Audio(audioSrc);
+      ttsAudioRef.current = audio;
+      setTtsPlayingId(todoId);
+
+      audio.onended = () => {
+        setTtsPlayingId(null);
+        ttsAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        setTtsPlayingId(null);
+        ttsAudioRef.current = null;
+        setTtsError("音频播放失败。");
+      };
+
+      await audio.play();
+    } catch (error) {
+      setTtsError(error instanceof Error ? error.message : "语音合成失败。");
+    } finally {
+      setTtsLoadingId(null);
+    }
+  };
+
   const handleClearApiKey = () => {
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem(API_KEY_STORAGE);
@@ -445,6 +585,7 @@ export default function App() {
 
   const aiInputReady = aiInput.trim().length > 0;
   const hasLocalKey = apiKey.trim().length > 0;
+  const hasMimoKey = mimoKey.trim().length > 0;
 
   return (
     <>
@@ -598,6 +739,63 @@ export default function App() {
                     </ul>
                   </div>
                 ) : null}
+              </div>
+
+              {/* TTS 语音合成设置 */}
+              <div className="ai-panel tts-panel">
+                <div className="ai-header">
+                  <div>
+                    <h2>语音合成</h2>
+                    <p>点击任务旁的喇叭图标，AI 会朗读任务内容。</p>
+                  </div>
+                  <span className="ai-badge tts-badge">MiMo TTS</span>
+                </div>
+
+                <div className="ai-key">
+                  <div className="ai-key-header">
+                    <span>MiMo API Key</span>
+                    <span className={`ai-key-indicator ${hasMimoKey ? "ready" : ""}`}>
+                      {hasMimoKey ? "已保存" : "未保存"}
+                    </span>
+                  </div>
+                  <div className="ai-key-row">
+                    <input
+                      type="password"
+                      name="mimo-api-key"
+                      placeholder="粘贴 MiMo API Key"
+                      value={mimoKey}
+                      onChange={(e) => setMimoKey(e.target.value)}
+                      autoComplete="off"
+                      aria-label="MiMo API Key"
+                    />
+                    <button type="button" onClick={handleSaveMimoKey}>
+                      保存
+                    </button>
+                    <button type="button" className="ghost" onClick={handleClearMimoKey}>
+                      清除
+                    </button>
+                  </div>
+                  <p className="ai-key-help">
+                    从 platform.xiaomimimo.com 获取 API Key，未填写时使用服务器环境变量。
+                  </p>
+                  {mimoKeyStatus ? <span className="ai-key-status">{mimoKeyStatus}</span> : null}
+                </div>
+
+                <div className="tts-style-section">
+                  <label>朗读风格</label>
+                  <div className="tts-style-selector">
+                    {TTS_STYLES.map((s) => (
+                      <button
+                        key={s.value}
+                        type="button"
+                        className={`tag-btn ${ttsStyle === s.value ? "selected" : ""}`}
+                        onClick={() => handleTtsStyleChange(s.value)}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -787,6 +985,22 @@ export default function App() {
                   <div className="todo-actions">
                     <button
                       type="button"
+                      className={`tts-btn ${ttsPlayingId === todo.id ? "playing" : ""}`}
+                      onClick={() => handleTtsSpeak(todo.id, todo.text)}
+                      disabled={ttsLoadingId === todo.id}
+                      aria-label={ttsPlayingId === todo.id ? "停止朗读" : `朗读 ${todo.text}`}
+                      title={ttsPlayingId === todo.id ? "停止" : "朗读"}
+                    >
+                      {ttsLoadingId === todo.id ? (
+                        <span className="tts-loading" />
+                      ) : ttsPlayingId === todo.id ? (
+                        <StopIcon />
+                      ) : (
+                        <SpeakerIcon />
+                      )}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleDelete(todo.id)}
                       aria-label={`删除 ${todo.text}`}
                     >
@@ -797,6 +1011,13 @@ export default function App() {
               ))
             )}
           </ul>
+
+          {ttsError ? (
+            <div className="tts-error" role="alert">
+              {ttsError}
+              <button type="button" onClick={() => setTtsError("")}>关闭</button>
+            </div>
+          ) : null}
 
           <div className="footer">
             <span>已自动保存在本机浏览器中。</span>
