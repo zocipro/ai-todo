@@ -1,19 +1,31 @@
-import { FormEvent, useEffect, useState } from "react";
+import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 
 type Filter = "all" | "active" | "done";
+type Priority = "high" | "medium" | "low";
+type Theme = "dark" | "light";
+
+const TAG_OPTIONS = ["工作", "生活", "学习", "健康", "其他"] as const;
+type Tag = (typeof TAG_OPTIONS)[number];
 
 type Todo = {
   id: string;
   text: string;
   done: boolean;
   createdAt: number;
+  priority: Priority;
+  tag: Tag;
+  dueDate: string | null;
 };
-
-type Theme = "dark" | "light";
 
 const STORAGE_KEY = "ai-todo-items";
 const API_KEY_STORAGE = "ai-todo-api-key";
 const THEME_STORAGE = "ai-todo-theme";
+
+const PRIORITY_LABELS: Record<Priority, string> = {
+  high: "高",
+  medium: "中",
+  low: "低",
+};
 
 const createId = () => {
   if (globalThis.crypto && "randomUUID" in globalThis.crypto) {
@@ -35,6 +47,13 @@ const isTodo = (value: unknown): value is Todo => {
   );
 };
 
+const migrateTodo = (raw: Todo): Todo => ({
+  ...raw,
+  priority: raw.priority || "medium",
+  tag: raw.tag || "其他",
+  dueDate: raw.dueDate ?? null,
+});
+
 const loadTodos = (): Todo[] => {
   if (typeof localStorage === "undefined") {
     return [];
@@ -48,7 +67,7 @@ const loadTodos = (): Todo[] => {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter(isTodo);
+    return parsed.filter(isTodo).map(migrateTodo);
   } catch {
     return [];
   }
@@ -74,9 +93,38 @@ const formatDate = (value: number) => {
   }).format(new Date(value));
 };
 
+const formatDueDate = (dateStr: string) => {
+  const date = new Date(dateStr + "T00:00:00");
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+};
+
+const isOverdue = (dateStr: string | null, done: boolean) => {
+  if (!dateStr || done) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dateStr + "T00:00:00");
+  return due < today;
+};
+
+const isDueToday = (dateStr: string | null, done: boolean) => {
+  if (!dateStr || done) return false;
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return dateStr === todayStr;
+};
+
 const normalizeSuggestion = (value: string) =>
   value.replace(/^[\s\-•\d\.\)\(]+/, "").replace(/\s+/g, " ").trim();
 
+const getTodayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// Icons
 const SunIcon = () => (
   <svg className="icon-sun" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z" />
@@ -103,10 +151,25 @@ const CloseIcon = () => (
   </svg>
 );
 
+const DragIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 16, height: 16 }}>
+    <circle cx="9" cy="6" r="1.5" />
+    <circle cx="15" cy="6" r="1.5" />
+    <circle cx="9" cy="12" r="1.5" />
+    <circle cx="15" cy="12" r="1.5" />
+    <circle cx="9" cy="18" r="1.5" />
+    <circle cx="15" cy="18" r="1.5" />
+  </svg>
+);
+
 export default function App() {
   const [todos, setTodos] = useState<Todo[]>(() => loadTodos());
   const [input, setInput] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [tagFilter, setTagFilter] = useState<Tag | "all">("all");
+  const [inputPriority, setInputPriority] = useState<Priority>("medium");
+  const [inputTag, setInputTag] = useState<Tag>("其他");
+  const [inputDueDate, setInputDueDate] = useState("");
   const [aiInput, setAiInput] = useState("");
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
@@ -116,6 +179,9 @@ export default function App() {
   const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showAddOptions, setShowAddOptions] = useState(false);
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -143,14 +209,12 @@ export default function App() {
   const totalCount = todos.length;
   const completedCount = todos.filter((todo) => todo.done).length;
   const remainingCount = totalCount - completedCount;
+  const overdueCount = todos.filter((t) => isOverdue(t.dueDate, t.done)).length;
 
   const visibleTodos = todos.filter((todo) => {
-    if (filter === "active") {
-      return !todo.done;
-    }
-    if (filter === "done") {
-      return todo.done;
-    }
+    if (filter === "active" && todo.done) return false;
+    if (filter === "done" && !todo.done) return false;
+    if (tagFilter !== "all" && todo.tag !== tagFilter) return false;
     return true;
   });
 
@@ -165,9 +229,14 @@ export default function App() {
       text: trimmed,
       done: false,
       createdAt: Date.now(),
+      priority: inputPriority,
+      tag: inputTag,
+      dueDate: inputDueDate || null,
     };
     setTodos((prev) => [nextTodo, ...prev]);
     setInput("");
+    setInputDueDate("");
+    setShowAddOptions(false);
   };
 
   const handleToggle = (id: string) => {
@@ -184,6 +253,42 @@ export default function App() {
     setTodos((prev) => prev.filter((todo) => !todo.done));
   };
 
+  // Drag and drop
+  const handleDragStart = (index: number) => {
+    dragItem.current = index;
+  };
+
+  const handleDragEnter = (index: number) => {
+    dragOverItem.current = index;
+  };
+
+  const handleDragEnd = () => {
+    if (dragItem.current === null || dragOverItem.current === null) return;
+    if (dragItem.current === dragOverItem.current) return;
+
+    // Map visible indices to actual todo indices
+    const visibleIds = visibleTodos.map((t) => t.id);
+    const fromId = visibleIds[dragItem.current];
+    const toId = visibleIds[dragOverItem.current];
+
+    setTodos((prev) => {
+      const items = [...prev];
+      const fromIdx = items.findIndex((t) => t.id === fromId);
+      const toIdx = items.findIndex((t) => t.id === toId);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const [moved] = items.splice(fromIdx, 1);
+      items.splice(toIdx, 0, moved);
+      return items;
+    });
+
+    dragItem.current = null;
+    dragOverItem.current = null;
+  };
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+  };
+
   const buildTodos = (items: string[]) => {
     const existing = new Set(todos.map((todo) => todo.text));
     const now = Date.now();
@@ -196,6 +301,9 @@ export default function App() {
         text,
         done: false,
         createdAt: now + index,
+        priority: "medium" as Priority,
+        tag: "其他" as Tag,
+        dueDate: null,
       }));
   };
 
@@ -331,7 +439,9 @@ export default function App() {
       ? "还没有任务。先在上方添加第一件事项。"
       : filter === "active"
         ? "进行中的任务已全部完成。"
-        : "还没有已完成的任务。";
+        : filter === "done"
+          ? "还没有已完成的任务。"
+          : "没有匹配的任务。";
 
   const aiInputReady = aiInput.trim().length > 0;
   const hasLocalKey = apiKey.trim().length > 0;
@@ -510,6 +620,12 @@ export default function App() {
                 <span>剩余</span>
                 <strong>{remainingCount}</strong>
               </div>
+              {overdueCount > 0 ? (
+                <div className="stat-inline stat-overdue">
+                  <span>逾期</span>
+                  <strong>{overdueCount}</strong>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -520,45 +636,131 @@ export default function App() {
               placeholder="添加今天想完成的任务"
               value={input}
               onChange={(event) => setInput(event.target.value)}
+              onFocus={() => setShowAddOptions(true)}
               maxLength={120}
               aria-label="新任务"
             />
             <button type="submit">添加</button>
           </form>
 
+          {showAddOptions ? (
+            <div className="add-options">
+              <div className="add-option-group">
+                <label>优先级</label>
+                <div className="priority-selector">
+                  {(["high", "medium", "low"] as Priority[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      className={`priority-btn priority-${p} ${inputPriority === p ? "selected" : ""}`}
+                      onClick={() => setInputPriority(p)}
+                    >
+                      {PRIORITY_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="add-option-group">
+                <label>标签</label>
+                <div className="tag-selector">
+                  {TAG_OPTIONS.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      className={`tag-btn ${inputTag === t ? "selected" : ""}`}
+                      onClick={() => setInputTag(t)}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="add-option-group">
+                <label>截止日期</label>
+                <input
+                  type="date"
+                  value={inputDueDate}
+                  min={getTodayStr()}
+                  onChange={(e) => setInputDueDate(e.target.value)}
+                  className="date-input"
+                />
+              </div>
+              <button
+                type="button"
+                className="add-options-close"
+                onClick={() => setShowAddOptions(false)}
+              >
+                收起选项
+              </button>
+            </div>
+          ) : null}
+
           <div className="filters">
-            <button
-              type="button"
-              className={filter === "all" ? "active" : ""}
-              aria-pressed={filter === "all"}
-              onClick={() => setFilter("all")}
-            >
-              全部
-            </button>
-            <button
-              type="button"
-              className={filter === "active" ? "active" : ""}
-              aria-pressed={filter === "active"}
-              onClick={() => setFilter("active")}
-            >
-              进行中
-            </button>
-            <button
-              type="button"
-              className={filter === "done" ? "active" : ""}
-              aria-pressed={filter === "done"}
-              onClick={() => setFilter("done")}
-            >
-              已完成
-            </button>
+            <div className="filter-group">
+              <button
+                type="button"
+                className={filter === "all" ? "active" : ""}
+                aria-pressed={filter === "all"}
+                onClick={() => setFilter("all")}
+              >
+                全部
+              </button>
+              <button
+                type="button"
+                className={filter === "active" ? "active" : ""}
+                aria-pressed={filter === "active"}
+                onClick={() => setFilter("active")}
+              >
+                进行中
+              </button>
+              <button
+                type="button"
+                className={filter === "done" ? "active" : ""}
+                aria-pressed={filter === "done"}
+                onClick={() => setFilter("done")}
+              >
+                已完成
+              </button>
+            </div>
+            <div className="filter-group">
+              <button
+                type="button"
+                className={tagFilter === "all" ? "active" : ""}
+                onClick={() => setTagFilter("all")}
+              >
+                全部标签
+              </button>
+              {TAG_OPTIONS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={tagFilter === t ? "active" : ""}
+                  onClick={() => setTagFilter(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
 
           <ul className="list">
             {visibleTodos.length === 0 ? (
               <li className="empty">{emptyMessage}</li>
             ) : (
-              visibleTodos.map((todo) => (
-                <li key={todo.id} className="todo">
+              visibleTodos.map((todo, index) => (
+                <li
+                  key={todo.id}
+                  className={`todo ${isOverdue(todo.dueDate, todo.done) ? "todo-overdue" : ""} ${isDueToday(todo.dueDate, todo.done) ? "todo-due-today" : ""}`}
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragEnter={() => handleDragEnter(index)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={handleDragOver}
+                >
+                  <span className="drag-handle">
+                    <DragIcon />
+                  </span>
+                  <span className={`priority-dot priority-${todo.priority}`} title={`优先级：${PRIORITY_LABELS[todo.priority]}`} />
                   <input
                     type="checkbox"
                     checked={todo.done}
@@ -571,7 +773,16 @@ export default function App() {
                   />
                   <div className="todo-text">
                     <span className={todo.done ? "done" : ""}>{todo.text}</span>
-                    <span className="todo-meta">添加于 {formatDate(todo.createdAt)}</span>
+                    <div className="todo-meta">
+                      <span className={`tag-pill tag-${todo.tag}`}>{todo.tag}</span>
+                      {todo.dueDate ? (
+                        <span className={`due-date ${isOverdue(todo.dueDate, todo.done) ? "overdue" : ""} ${isDueToday(todo.dueDate, todo.done) ? "due-today" : ""}`}>
+                          {isOverdue(todo.dueDate, todo.done) ? "已逾期 " : isDueToday(todo.dueDate, todo.done) ? "今天 " : ""}
+                          {formatDueDate(todo.dueDate)}
+                        </span>
+                      ) : null}
+                      <span>添加于 {formatDate(todo.createdAt)}</span>
+                    </div>
                   </div>
                   <div className="todo-actions">
                     <button
