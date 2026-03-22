@@ -15,54 +15,8 @@ const json = (data: unknown, status = 200) =>
     },
   });
 
-const normalizeTask = (value: string) =>
-  value.replace(/^[\s\-•\d\.\)\(]+/, "").replace(/\s+/g, " ").trim();
-
-const pickTasks = (value: unknown): string[] => {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string");
-  }
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    if (Array.isArray(record.tasks)) {
-      return record.tasks.filter((item): item is string => typeof item === "string");
-    }
-  }
-  return [];
-};
-
-const extractTasks = (content: string) => {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    const tasks = pickTasks(parsed);
-    if (tasks.length > 0) {
-      return tasks;
-    }
-  } catch {
-  }
-
-  const match = trimmed.match(/\[[\s\S]*\]/);
-  if (match) {
-    try {
-      const parsed = JSON.parse(match[0]);
-      const tasks = pickTasks(parsed);
-      if (tasks.length > 0) {
-        return tasks;
-      }
-    } catch {
-    }
-  }
-
-  return trimmed
-    .split("\n")
-    .map((line) => normalizeTask(line))
-    .filter(Boolean);
-};
+const VALID_PRIORITIES = ["high", "medium", "low"];
+const VALID_TAGS = ["工作", "生活", "学习", "健康", "其他"];
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = await request.json().catch(() => null);
@@ -85,22 +39,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const payload = {
     model,
-    temperature: 0.4,
-    max_tokens: 512,
+    temperature: 0.3,
+    max_tokens: 256,
     messages: [
       {
         role: "system",
-        content:
-          "你是一名任务拆解助手，请根据用户描述输出 4-8 条中文待办项。只输出 JSON 数组，例如：[\"任务1\",\"任务2\"]，不要输出其它文字。",
+        content: `你是一个智能待办助手。用户会输入一段随意的、可能不通顺的自然语言，你需要：
+1. 理解用户意图，整理成一个简洁通顺的任务标题（不超过30字）
+2. 判断优先级：high（紧急/重要/deadline很近）、medium（普通）、low（不急/随便）
+3. 判断标签：工作、生活、学习、健康、其他
+
+只输出 JSON，格式：{"title":"任务标题","priority":"medium","tag":"其他"}
+不要输出任何其它文字。`,
       },
       {
         role: "user",
-        content: [
-          {
-            type: "text",
-            text: prompt,
-          },
-        ],
+        content: [{ type: "text", text: prompt }],
       },
     ],
   };
@@ -126,10 +80,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: "豆包返回内容为空。", detail: data }, 502);
   }
 
-  const tasks = extractTasks(content)
-    .map(normalizeTask)
-    .filter(Boolean)
-    .slice(0, 12);
+  // Parse structured response
+  let parsed: { title?: string; priority?: string; tag?: string } = {};
+  try {
+    const trimmed = content.trim();
+    // Try direct parse first, then extract JSON from text
+    const jsonStr = trimmed.startsWith("{") ? trimmed : trimmed.match(/\{[\s\S]*\}/)?.[0];
+    if (jsonStr) {
+      parsed = JSON.parse(jsonStr);
+    }
+  } catch {
+    // Fallback: use input as title
+  }
 
-  return json({ tasks });
+  const title = typeof parsed.title === "string" && parsed.title.trim()
+    ? parsed.title.trim()
+    : prompt;
+  const priority = VALID_PRIORITIES.includes(parsed.priority || "") ? parsed.priority! : "medium";
+  const tag = VALID_TAGS.includes(parsed.tag || "") ? parsed.tag! : "其他";
+
+  return json({ title, priority, tag });
 };
