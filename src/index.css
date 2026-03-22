@@ -1455,6 +1455,40 @@ body {
   box-shadow: 0 0 0 3px var(--input-focus-ring);
 }
 
+.tts-section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tts-enhance-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.tts-enhance-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--btn-primary-text);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.tts-enhance-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .tts-textarea {
   width: 100%;
   padding: 14px;
