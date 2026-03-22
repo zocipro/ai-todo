@@ -30,65 +30,83 @@ const SYSTEM_PROMPT = `你是一个语音合成文本标注专家。你的任务
 7. 如果文本本身已经包含音频标签，保留原有标签并在需要的地方补充新标签`;
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  const body = await request.json().catch(() => null);
-  const text = typeof body?.text === "string" ? body.text.trim() : "";
-  const providedKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
-  const providedModel = typeof body?.model === "string" ? body.model.trim() : "";
-
-  if (!text) {
-    return json({ error: "请提供要标注的文本。" }, 400);
-  }
-
-  const apiKey = providedKey || env.DOUBAO_API_KEY || env.ARK_API_KEY;
-  if (!apiKey) {
-    return json({ error: "请在设置中填写豆包 API Key 或配置 DOUBAO_API_KEY 环境变量。" }, 400);
-  }
-
-  const model = providedModel || env.DOUBAO_MODEL || DEFAULT_MODEL;
-  const baseUrl = (env.DOUBAO_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3")
-    .replace(/\/+$/, "");
-
-  const payload = {
-    model,
-    max_tokens: 2048,
-    reasoning_effort: "low",
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: text },
-    ],
-  };
-
-  let response: Response;
   try {
-    response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "未知网络错误";
-    return json({ error: `无法连接豆包 API：${msg}` }, 502);
-  }
+    const body = await request.json().catch(() => null);
+    const text = typeof body?.text === "string" ? body.text.trim() : "";
+    const providedKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
+    const providedModel = typeof body?.model === "string" ? body.model.trim() : "";
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    let errorMsg = `豆包 API 请求失败（${response.status}）`;
+    if (!text) {
+      return json({ error: "请提供要标注的文本。" }, 400);
+    }
+
+    const apiKey = providedKey || env.DOUBAO_API_KEY || env.ARK_API_KEY;
+    if (!apiKey) {
+      return json({ error: "请在设置中填写豆包 API Key 或配置 DOUBAO_API_KEY 环境变量。" }, 400);
+    }
+
+    const model = providedModel || env.DOUBAO_MODEL || DEFAULT_MODEL;
+    const baseUrl = (env.DOUBAO_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3")
+      .replace(/\/+$/, "");
+
+    const payload = {
+      model,
+      max_tokens: 2048,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: text },
+      ],
+    };
+
+    let response: Response;
     try {
-      const err = JSON.parse(detail);
-      if (err?.error?.message) errorMsg += `：${err.error.message}`;
-    } catch {}
-    return json({ error: errorMsg, detail }, 502);
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "未知网络错误";
+      return json({ error: `无法连接豆包 API：${msg}` }, 502);
+    }
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      let errorMsg = `豆包 API 请求失败（${response.status}）`;
+      try {
+        const err = JSON.parse(detail);
+        if (err?.error?.message) errorMsg += `：${err.error.message}`;
+        else if (err?.error?.code) errorMsg += `：${err.error.code}`;
+      } catch {}
+      return json({ error: errorMsg, detail }, response.status);
+    }
+
+    const rawText = await response.text();
+    let data: Record<string, unknown> | null = null;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      return json({ error: "豆包返回内容解析失败。", detail: rawText }, 502);
+    }
+
+    const choice = (data as Record<string, unknown>)?.choices;
+    const firstChoice = Array.isArray(choice) ? (choice[0] as Record<string, unknown>) : null;
+    const message = firstChoice?.message as Record<string, unknown> | null;
+    const content = typeof message?.content === "string" ? message.content : "";
+
+    if (!content.trim()) {
+      return json({
+        error: "AI 未返回有效内容。",
+        detail: JSON.stringify(data).slice(0, 500),
+      }, 502);
+    }
+
+    return json({ enhanced: content.trim() });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "未知错误";
+    return json({ error: `服务器内部错误：${msg}` }, 500);
   }
-
-  const data = await response.json().catch(() => null);
-  const content = data?.choices?.[0]?.message?.content;
-
-  if (typeof content !== "string" || !content.trim()) {
-    return json({ error: "AI 未返回有效内容。" }, 502);
-  }
-
-  return json({ enhanced: content.trim() });
 };
