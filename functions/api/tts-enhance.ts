@@ -50,8 +50,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const payload = {
     model,
-    temperature: 0.7,
     max_tokens: 2048,
+    reasoning_effort: "low",
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: text },
@@ -75,7 +75,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    return json({ error: `豆包 API 请求失败（${response.status}）`, detail }, 502);
+    let errorMsg = `豆包 API 请求失败（${response.status}）`;
+    try {
+      const err = JSON.parse(detail);
+      if (err?.error?.message) errorMsg += `：${err.error.message}`;
+    } catch {}
+    return json({ error: errorMsg, detail }, 502);
   }
 
   const data = await response.json().catch(() => null);
