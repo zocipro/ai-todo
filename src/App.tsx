@@ -23,6 +23,13 @@ const API_KEY_STORAGE = "ai-todo-api-key";
 const MIMO_KEY_STORAGE = "ai-todo-mimo-key";
 const TTS_STYLE_STORAGE = "ai-todo-tts-style";
 const THEME_STORAGE = "ai-todo-theme";
+const DOUBAO_MODEL_STORAGE = "ai-todo-doubao-model";
+
+const DOUBAO_MODELS = [
+  { value: "Doubao-Seed-2.0-pro", label: "2.0 Pro", desc: "旗舰版，深度推理" },
+  { value: "Doubao-Seed-2.0-lite", label: "2.0 Lite", desc: "均衡性价比" },
+  { value: "Doubao-Seed-2.0-mini", label: "2.0 Mini", desc: "轻量低延迟" },
+] as const;
 
 const TTS_STYLES = [
   { value: "", label: "自然朗读" },
@@ -261,6 +268,12 @@ export default function App() {
   const [aiStatus, setAiStatus] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
+  const [doubaoModel, setDoubaoModel] = useState(() => {
+    if (typeof localStorage !== "undefined") {
+      return localStorage.getItem(DOUBAO_MODEL_STORAGE) || "Doubao-Seed-2.0-lite";
+    }
+    return "Doubao-Seed-2.0-lite";
+  });
   const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showAddOptions, setShowAddOptions] = useState(false);
@@ -436,7 +449,7 @@ export default function App() {
 
     try {
       const trimmedKey = apiKey.trim();
-      const payload: Record<string, unknown> = { prompt };
+      const payload: Record<string, unknown> = { prompt, model: doubaoModel };
       if (trimmedKey) {
         payload.apiKey = trimmedKey;
       }
@@ -541,6 +554,13 @@ export default function App() {
     localStorage.setItem(API_KEY_STORAGE, trimmed);
     setApiKey(trimmed);
     setApiKeyStatus("API Key 已保存在本机浏览器中。");
+  };
+
+  const handleDoubaoModelChange = (model: string) => {
+    setDoubaoModel(model);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(DOUBAO_MODEL_STORAGE, model);
+    }
   };
 
   // TTS handlers
@@ -783,7 +803,7 @@ export default function App() {
     setTtsPageError("");
 
     try {
-      const payload: Record<string, unknown> = { text };
+      const payload: Record<string, unknown> = { text, model: doubaoModel };
       const trimmedKey = apiKey.trim();
       if (trimmedKey) {
         payload.apiKey = trimmedKey;
@@ -942,6 +962,24 @@ export default function App() {
                     密钥仅保存在本机浏览器中，未填写时将使用服务器环境变量。
                   </p>
                   {apiKeyStatus ? <span className="ai-key-status">{apiKeyStatus}</span> : null}
+                </div>
+
+                <div className="ai-model-section">
+                  <label>豆包模型</label>
+                  <div className="ai-model-selector">
+                    {DOUBAO_MODELS.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        className={`ai-model-btn ${doubaoModel === m.value ? "selected" : ""}`}
+                        onClick={() => handleDoubaoModelChange(m.value)}
+                        title={m.desc}
+                      >
+                        <span className="ai-model-label">{m.label}</span>
+                        <span className="ai-model-desc">{m.desc}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <form className="ai-form" onSubmit={handleAiGenerate}>

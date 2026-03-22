@@ -1099,6 +1099,64 @@ body {
   cursor: not-allowed;
 }
 
+/* === AI Model Selector === */
+.ai-model-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-model-section label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ai-model-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ai-model-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-model-btn:hover {
+  border-color: var(--accent);
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.ai-model-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--btn-primary-text);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.ai-model-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.ai-model-desc {
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
 /* === TTS === */
 .tts-panel {
   border-top: 1px solid var(--glass-border);
