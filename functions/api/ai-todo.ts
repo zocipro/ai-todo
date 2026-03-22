@@ -54,7 +54,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       },
       {
         role: "user",
-        content: [{ type: "text", text: prompt }],
+        content: prompt,
       },
     ],
   };
