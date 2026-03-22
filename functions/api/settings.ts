@@ -32,12 +32,21 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
 
   try {
     const body = await request.json().catch(() => null);
-    const settings = body?.settings;
-    if (!settings || typeof settings !== "object") {
+    const incoming = body?.settings;
+    if (!incoming || typeof incoming !== "object") {
       return json({ error: "无效的设置数据。" }, 400);
     }
 
-    const settingsJson = JSON.stringify(settings);
+    // Merge with existing settings instead of overwriting
+    const existing = await env.DB.prepare(
+      "SELECT settings_json FROM user_settings WHERE user_id = ?"
+    )
+      .bind(data.user.id)
+      .first<{ settings_json: string }>();
+
+    const merged = existing ? { ...JSON.parse(existing.settings_json), ...incoming } : { ...incoming };
+
+    const settingsJson = JSON.stringify(merged);
     await env.DB.prepare(
       `INSERT OR REPLACE INTO user_settings (user_id, settings_json, updated_at)
        VALUES (?, ?, unixepoch())`
@@ -45,7 +54,7 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
       .bind(data.user.id, settingsJson)
       .run();
 
-    return json({ settings });
+    return json({ settings: merged });
   } catch (e: any) {
     return json({ error: "保存设置失败。", detail: e?.message }, 500);
   }
