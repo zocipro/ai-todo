@@ -1,4 +1,6 @@
 import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
+import AuthModal from "./AuthModal";
+import { authFetch, clearAuth, getToken, getUser, type AuthUser } from "./auth";
 
 type Page = "todo" | "tts";
 type Filter = "all" | "active" | "done";
@@ -8,7 +10,7 @@ type Theme = "dark" | "light";
 const TAG_OPTIONS = ["工作", "生活", "学习", "健康", "其他"] as const;
 type Tag = (typeof TAG_OPTIONS)[number];
 
-type Todo = {
+export type Todo = {
   id: string;
   text: string;
   done: boolean;
@@ -296,6 +298,11 @@ export default function App() {
   const [ttsPageAudioUrl, setTtsPageAudioUrl] = useState<string | null>(null);
   const [ttsEnhanceLoading, setTtsEnhanceLoading] = useState(false);
 
+  // Auth state
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getUser());
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("");
+
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -304,9 +311,63 @@ export default function App() {
     localStorage.setItem(THEME_STORAGE, theme);
   }, [theme]);
 
+  // Check token validity on mount & load cloud settings
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    authFetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          setAuthUser(data.user);
+          // Load cloud settings
+          authFetch("/api/settings")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((sd) => {
+              if (sd?.settings) {
+                const s = sd.settings;
+                if (s.apiKey) setApiKey(s.apiKey);
+                if (s.mimoKey) setMimoKey(s.mimoKey);
+                if (s.doubaoModel) setDoubaoModel(s.doubaoModel);
+                if (s.ttsStyle !== undefined) setTtsStyle(s.ttsStyle);
+              }
+            })
+            .catch(() => {});
+          // Load cloud todos
+          authFetch("/api/todos")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((td) => {
+              if (td?.todos && td.todos.length > 0) {
+                setTodos(td.todos.map(migrateTodo));
+              }
+            })
+            .catch(() => {});
+        } else {
+          clearAuth();
+          setAuthUser(null);
+        }
+      })
+      .catch(() => {
+        clearAuth();
+        setAuthUser(null);
+      });
+  }, []);
+
+  // Save todos to localStorage always; debounce cloud sync when logged in
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
-  }, [todos]);
+
+    if (authUser) {
+      const timer = setTimeout(() => {
+        authFetch("/api/todos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ todos }),
+        }).catch(() => {});
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [todos, authUser]);
 
   useEffect(() => {
     if (typeof localStorage === "undefined") {
@@ -371,9 +432,18 @@ export default function App() {
 
   const handleDelete = (id: string) => {
     setTodos((prev) => prev.filter((todo) => todo.id !== id));
+    if (authUser) {
+      authFetch(`/api/todos/${id}`, { method: "DELETE" }).catch(() => {});
+    }
   };
 
   const handleClearCompleted = () => {
+    if (authUser) {
+      const completedIds = todos.filter((t) => t.done).map((t) => t.id);
+      completedIds.forEach((id) => {
+        authFetch(`/api/todos/${id}`, { method: "DELETE" }).catch(() => {});
+      });
+    }
     setTodos((prev) => prev.filter((todo) => !todo.done));
   };
 
@@ -481,7 +551,8 @@ export default function App() {
     }
     localStorage.setItem(API_KEY_STORAGE, trimmed);
     setApiKey(trimmed);
-    setApiKeyStatus("API Key 已保存在本机浏览器中。");
+    setApiKeyStatus(authUser ? "API Key 已保存并同步到云端。" : "API Key 已保存在本机浏览器中。");
+    syncSettingsToCloud({ apiKey: trimmed });
   };
 
   const handleDoubaoModelChange = (model: string) => {
@@ -489,6 +560,7 @@ export default function App() {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(DOUBAO_MODEL_STORAGE, model);
     }
+    syncSettingsToCloud({ doubaoModel: model });
   };
 
   // TTS handlers
@@ -502,7 +574,8 @@ export default function App() {
     }
     localStorage.setItem(MIMO_KEY_STORAGE, trimmed);
     setMimoKey(trimmed);
-    setMimoKeyStatus("MiMo API Key 已保存。");
+    setMimoKeyStatus(authUser ? "MiMo API Key 已保存并同步到云端。" : "MiMo API Key 已保存。");
+    syncSettingsToCloud({ mimoKey: trimmed });
   };
 
   const handleClearMimoKey = () => {
@@ -602,6 +675,67 @@ export default function App() {
     } finally {
       setTtsLoadingId(null);
     }
+  };
+
+  // Auth handlers
+  const handleAuthSuccess = async (user: AuthUser) => {
+    setAuthUser(user);
+    setShowAuthModal(false);
+    setSyncStatus("正在同步...");
+    try {
+      // Sync local todos to cloud
+      const localTodos = loadTodos();
+      if (localTodos.length > 0) {
+        const res = await authFetch("/api/todos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ todos: localTodos }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data?.todos) setTodos(data.todos.map(migrateTodo));
+      } else {
+        const res = await authFetch("/api/todos");
+        const data = await res.json().catch(() => null);
+        if (data?.todos) setTodos(data.todos.map(migrateTodo));
+      }
+      // Sync local settings to cloud
+      const settings: Record<string, string> = {};
+      const savedKey = localStorage.getItem(API_KEY_STORAGE);
+      if (savedKey) settings.apiKey = savedKey;
+      const savedMimoKey = localStorage.getItem(MIMO_KEY_STORAGE);
+      if (savedMimoKey) settings.mimoKey = savedMimoKey;
+      const savedModel = localStorage.getItem(DOUBAO_MODEL_STORAGE);
+      if (savedModel) settings.doubaoModel = savedModel;
+      const savedStyle = localStorage.getItem(TTS_STYLE_STORAGE);
+      if (savedStyle !== null) settings.ttsStyle = savedStyle;
+      if (Object.keys(settings).length > 0) {
+        await authFetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings }),
+        }).catch(() => {});
+      }
+      setSyncStatus("同步完成");
+    } catch {
+      setSyncStatus("同步失败，数据已保存在本地");
+    }
+    setTimeout(() => setSyncStatus(""), 3000);
+  };
+
+  const handleLogout = () => {
+    clearAuth();
+    setAuthUser(null);
+    // Keep localStorage data as offline fallback
+  };
+
+  // Sync settings to cloud when saving API keys
+  const syncSettingsToCloud = (settings: Record<string, string>) => {
+    if (!authUser) return;
+    authFetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings }),
+    }).catch(() => {});
   };
 
   const handleClearApiKey = () => {
@@ -827,6 +961,27 @@ export default function App() {
             </button>
           </div>
           <div className="nav-right">
+            {authUser ? (
+              <div className="user-info">
+                <span className="user-email" title={authUser.email}>
+                  {authUser.email.split("@")[0]}
+                </span>
+                <button className="theme-toggle" onClick={handleLogout} aria-label="退出登录" title="退出登录">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button className="theme-toggle" onClick={() => setShowAuthModal(true)} aria-label="登录">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </button>
+            )}
             <button
               className="theme-toggle"
               onClick={() => setSettingsOpen(true)}
@@ -845,6 +1000,17 @@ export default function App() {
           </div>
         </div>
       </nav>
+
+      {/* 登录/注册弹窗 */}
+      {showAuthModal ? (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
+        />
+      ) : null}
+
+      {/* 同步状态提示 */}
+      {syncStatus ? <div className="sync-toast">{syncStatus}</div> : null}
 
       {/* 设置弹窗 */}
       {settingsOpen ? (
@@ -895,7 +1061,7 @@ export default function App() {
                     </button>
                   </div>
                   <p className="ai-key-help">
-                    密钥仅保存在本机浏览器中，未填写时将使用服务器环境变量。
+                    {authUser ? "密钥已同步到云端账号，跨设备可用。" : "密钥仅保存在本机浏览器中，登录后可同步到云端。"}未填写时将使用服务器环境变量。
                   </p>
                   {apiKeyStatus ? <span className="ai-key-status">{apiKeyStatus}</span> : null}
                 </div>
@@ -1369,7 +1535,7 @@ export default function App() {
           ) : null}
 
           <div className="footer">
-            <span>已自动保存在本机浏览器中。</span>
+            <span>{authUser ? "已同步到云端。" : "已自动保存在本机浏览器中。"}</span>
             <button
               className="clear"
               type="button"
