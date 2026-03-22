@@ -26,9 +26,9 @@ const THEME_STORAGE = "ai-todo-theme";
 const DOUBAO_MODEL_STORAGE = "ai-todo-doubao-model";
 
 const DOUBAO_MODELS = [
-  { value: "Doubao-Seed-2.0-pro", label: "2.0 Pro", desc: "旗舰版，深度推理" },
-  { value: "Doubao-Seed-2.0-lite", label: "2.0 Lite", desc: "均衡性价比" },
-  { value: "Doubao-Seed-2.0-mini", label: "2.0 Mini", desc: "轻量低延迟" },
+  { value: "doubao-seed-2-0-pro-260215", label: "2.0 Pro", desc: "旗舰版，深度推理" },
+  { value: "doubao-seed-2-0-lite-260215", label: "2.0 Lite", desc: "均衡性价比" },
+  { value: "doubao-seed-2-0-mini-260215", label: "2.0 Mini", desc: "轻量低延迟" },
 ] as const;
 
 const TTS_STYLES = [
@@ -270,9 +270,9 @@ export default function App() {
   const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [doubaoModel, setDoubaoModel] = useState(() => {
     if (typeof localStorage !== "undefined") {
-      return localStorage.getItem(DOUBAO_MODEL_STORAGE) || "Doubao-Seed-2.0-lite";
+      return localStorage.getItem(DOUBAO_MODEL_STORAGE) || "doubao-seed-2-0-lite-260215";
     }
-    return "Doubao-Seed-2.0-lite";
+    return "doubao-seed-2-0-lite-260215";
   });
   const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
   const [settingsOpen, setSettingsOpen] = useState(false);
