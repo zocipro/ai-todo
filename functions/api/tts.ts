@@ -39,6 +39,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   const style = typeof body?.style === "string" ? body.style.trim() : "";
+  const voice = typeof body?.voice === "string" ? body.voice.trim() : "mimo_default";
   const providedKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
 
   if (!text) {
@@ -56,18 +57,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // MiMo-V2-TTS format: text to speak goes in assistant role content
   // Style instruction goes in a preceding user message
+  // Style tags like <style>开心</style> should be prepended to text directly
   const messages: { role: string; content: string }[] = [];
   if (style) {
     messages.push({ role: "user", content: `请用以下风格朗读：${style}` });
   }
   messages.push({ role: "assistant", content: text });
 
+  const validVoices = ["mimo_default", "default_zh", "default_en"];
+  const selectedVoice = validVoices.includes(voice) ? voice : "mimo_default";
+
   const payload = {
     model,
     messages,
     audio: {
       format: "wav",
-      voice: "mimo_default",
+      voice: selectedVoice,
     },
   };
 

@@ -1,5 +1,6 @@
 import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 
+type Page = "todo" | "tts";
 type Filter = "all" | "active" | "done";
 type Priority = "high" | "medium" | "low";
 type Theme = "dark" | "light";
@@ -31,6 +32,22 @@ const TTS_STYLES = [
   { value: "沉稳冷静", label: "沉稳冷静" },
   { value: "困倦略带沙哑", label: "慵懒沙哑" },
 ] as const;
+
+const TTS_VOICES = [
+  { value: "mimo_default", label: "MiMo 默认" },
+  { value: "default_zh", label: "中文女声" },
+  { value: "default_en", label: "英文女声" },
+] as const;
+
+const TTS_STYLE_PRESETS = [
+  { category: "语速控制", items: ["变快", "变慢"] },
+  { category: "情绪变化", items: ["开心", "悲伤", "生气"] },
+  { category: "角色扮演", items: ["孙悟空", "林黛玉"] },
+  { category: "风格变化", items: ["悄悄话", "夹子音", "台湾腔", "唱歌"] },
+  { category: "方言", items: ["东北话", "四川话", "河南话", "粤语"] },
+] as const;
+
+const TTS_VOICE_STORAGE = "ai-todo-tts-voice";
 
 const PRIORITY_LABELS: Record<Priority, string> = {
   high: "高",
@@ -187,7 +204,33 @@ const StopIcon = () => (
   </svg>
 );
 
+// TTS page icon
+const MicIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" y1="19" x2="12" y2="23" />
+    <line x1="8" y1="23" x2="16" y2="23" />
+  </svg>
+);
+
+const TodoIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
 export default function App() {
+  const [page, setPage] = useState<Page>("todo");
   const [todos, setTodos] = useState<Todo[]>(() => loadTodos());
   const [input, setInput] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -212,6 +255,23 @@ export default function App() {
   const [ttsError, setTtsError] = useState("");
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const [ttsPlayingId, setTtsPlayingId] = useState<string | null>(null);
+
+  // TTS page states
+  const [ttsPageText, setTtsPageText] = useState("");
+  const [ttsPageVoice, setTtsPageVoice] = useState(() => {
+    if (typeof localStorage !== "undefined") {
+      return localStorage.getItem(TTS_VOICE_STORAGE) || "mimo_default";
+    }
+    return "mimo_default";
+  });
+  const [ttsPageStyles, setTtsPageStyles] = useState<string[]>([]);
+  const [ttsPageCustomStyle, setTtsPageCustomStyle] = useState("");
+  const [ttsPageLoading, setTtsPageLoading] = useState(false);
+  const [ttsPageError, setTtsPageError] = useState("");
+  const [ttsPagePlaying, setTtsPagePlaying] = useState(false);
+  const ttsPageAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [ttsPageAudioUrl, setTtsPageAudioUrl] = useState<string | null>(null);
+
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -587,6 +647,117 @@ export default function App() {
     setApiKeyStatus("已清除 API Key。");
   };
 
+  // TTS page handlers
+  const handleTtsPageVoiceChange = (v: string) => {
+    setTtsPageVoice(v);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(TTS_VOICE_STORAGE, v);
+    }
+  };
+
+  const handleTtsPageStyleToggle = (s: string) => {
+    setTtsPageStyles((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
+  };
+
+  const handleTtsPageStop = () => {
+    if (ttsPageAudioRef.current) {
+      ttsPageAudioRef.current.pause();
+      ttsPageAudioRef.current = null;
+    }
+    setTtsPagePlaying(false);
+  };
+
+  const handleTtsPageSpeak = async () => {
+    const text = ttsPageText.trim();
+    if (!text || ttsPageLoading) return;
+
+    handleTtsPageStop();
+    setTtsPageLoading(true);
+    setTtsPageError("");
+    setTtsPageAudioUrl(null);
+
+    try {
+      // Build the text with style tags and audio tags
+      let finalText = text;
+
+      // If style presets or custom style are selected, prepend <style> tag
+      const allStyles = [...ttsPageStyles];
+      if (ttsPageCustomStyle.trim()) {
+        allStyles.push(ttsPageCustomStyle.trim());
+      }
+      if (allStyles.length > 0) {
+        finalText = `<style>${allStyles.join(" ")}</style>${finalText}`;
+      }
+
+      const payload: Record<string, unknown> = {
+        text: finalText,
+        voice: ttsPageVoice,
+      };
+      const trimmedKey = mimoKey.trim();
+      if (trimmedKey) {
+        payload.apiKey = trimmedKey;
+      }
+
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      let data: Record<string, unknown> | null = null;
+      if (contentType.includes("application/json")) {
+        data = await response.json().catch(() => null);
+      }
+
+      if (!response.ok) {
+        if (!data) {
+          throw new Error(`语音合成失败（${response.status}）。请确认后端 /api/tts 已正确部署。`);
+        }
+        const msg = typeof data.error === "string" ? data.error : `语音合成失败（${response.status}）`;
+        const hint = typeof data.hint === "string" ? ` ${data.hint}` : "";
+        throw new Error(msg + hint);
+      }
+
+      if (!data?.audio) {
+        throw new Error("未收到音频数据。");
+      }
+
+      const audioSrc = `data:audio/wav;base64,${data.audio}`;
+      setTtsPageAudioUrl(audioSrc);
+
+      const audio = new Audio(audioSrc);
+      ttsPageAudioRef.current = audio;
+      setTtsPagePlaying(true);
+
+      audio.onended = () => {
+        setTtsPagePlaying(false);
+        ttsPageAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        setTtsPagePlaying(false);
+        ttsPageAudioRef.current = null;
+        setTtsPageError("音频播放失败。");
+      };
+
+      await audio.play();
+    } catch (error) {
+      setTtsPageError(error instanceof Error ? error.message : "语音合成失败。");
+    } finally {
+      setTtsPageLoading(false);
+    }
+  };
+
+  const handleTtsPageDownload = () => {
+    if (!ttsPageAudioUrl) return;
+    const a = document.createElement("a");
+    a.href = ttsPageAudioUrl;
+    a.download = `tts-${Date.now()}.wav`;
+    a.click();
+  };
+
   const emptyMessage =
     totalCount === 0
       ? "还没有任务。先在上方添加第一件事项。"
@@ -619,6 +790,22 @@ export default function App() {
               />
             </svg>
             <span>AI 待办</span>
+          </div>
+          <div className="nav-tabs">
+            <button
+              className={`nav-tab ${page === "todo" ? "active" : ""}`}
+              onClick={() => setPage("todo")}
+            >
+              <TodoIcon />
+              <span>待办</span>
+            </button>
+            <button
+              className={`nav-tab ${page === "tts" ? "active" : ""}`}
+              onClick={() => setPage("tts")}
+            >
+              <MicIcon />
+              <span>语音</span>
+            </button>
           </div>
           <div className="nav-right">
             <button
@@ -815,6 +1002,149 @@ export default function App() {
         </div>
       ) : null}
 
+      {page === "tts" ? (
+        <div className="page">
+          <section className="workspace tts-workspace">
+            <div className="tts-page-header">
+              <h2>文字转语音</h2>
+              <p>输入文字，选择音色和风格，生成语音。支持风格标签和细粒度音频控制。</p>
+            </div>
+
+            {/* MiMo API Key (if not saved) */}
+            {!hasMimoKey ? (
+              <div className="tts-key-hint">
+                请先在 <button type="button" className="link-btn" onClick={() => setSettingsOpen(true)}>设置</button> 中配置 MiMo API Key。
+              </div>
+            ) : null}
+
+            {/* Voice Selection */}
+            <div className="tts-section">
+              <label className="tts-section-label">音色选择</label>
+              <div className="tts-voice-selector">
+                {TTS_VOICES.map((v) => (
+                  <button
+                    key={v.value}
+                    type="button"
+                    className={`tag-btn ${ttsPageVoice === v.value ? "selected" : ""}`}
+                    onClick={() => handleTtsPageVoiceChange(v.value)}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Style Presets */}
+            <div className="tts-section">
+              <label className="tts-section-label">风格预设 <span className="tts-hint">可多选，组合使用</span></label>
+              {TTS_STYLE_PRESETS.map((group) => (
+                <div key={group.category} className="tts-style-group">
+                  <span className="tts-style-category">{group.category}</span>
+                  <div className="tts-style-items">
+                    {group.items.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className={`tag-btn ${ttsPageStyles.includes(s) ? "selected" : ""}`}
+                        onClick={() => handleTtsPageStyleToggle(s)}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Custom Style */}
+            <div className="tts-section">
+              <label className="tts-section-label">自定义风格 <span className="tts-hint">输入任意风格描述</span></label>
+              <input
+                type="text"
+                className="tts-custom-style"
+                placeholder="例如：温柔的妈妈讲故事"
+                value={ttsPageCustomStyle}
+                onChange={(e) => setTtsPageCustomStyle(e.target.value)}
+                maxLength={50}
+              />
+            </div>
+
+            {/* Text Input */}
+            <div className="tts-section">
+              <label className="tts-section-label">合成文本 <span className="tts-hint">支持音频标签细粒度控制</span></label>
+              <textarea
+                className="tts-textarea"
+                placeholder={"输入要合成的文字...\n\n音频标签示例：\n（紧张，深呼吸）呼……冷静，冷静。\n（极其疲惫，有气无力）师傅……到地方了叫我一声……"}
+                value={ttsPageText}
+                onChange={(e) => setTtsPageText(e.target.value)}
+                rows={6}
+                maxLength={2000}
+              />
+              <div className="tts-text-meta">
+                <span>{ttsPageText.length} / 2000</span>
+                {ttsPageStyles.length > 0 || ttsPageCustomStyle.trim() ? (
+                  <span className="tts-active-styles">
+                    风格：{[...ttsPageStyles, ...(ttsPageCustomStyle.trim() ? [ttsPageCustomStyle.trim()] : [])].join("、")}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="tts-actions">
+              <button
+                type="button"
+                className="tts-speak-btn"
+                onClick={handleTtsPageSpeak}
+                disabled={!ttsPageText.trim() || ttsPageLoading}
+              >
+                {ttsPageLoading ? (
+                  <><span className="tts-loading" /> 合成中...</>
+                ) : (
+                  <><SpeakerIcon /> 合成语音</>
+                )}
+              </button>
+              {ttsPagePlaying ? (
+                <button type="button" className="tts-stop-btn" onClick={handleTtsPageStop}>
+                  <StopIcon /> 停止播放
+                </button>
+              ) : null}
+              {ttsPageAudioUrl ? (
+                <button type="button" className="tts-download-btn" onClick={handleTtsPageDownload}>
+                  <DownloadIcon /> 下载音频
+                </button>
+              ) : null}
+            </div>
+
+            {/* Error */}
+            {ttsPageError ? (
+              <div className="tts-error" role="alert">
+                {ttsPageError}
+                <button type="button" onClick={() => setTtsPageError("")}>关闭</button>
+              </div>
+            ) : null}
+
+            {/* Usage Tips */}
+            <details className="tts-tips">
+              <summary>使用技巧</summary>
+              <div className="tts-tips-content">
+                <h4>风格控制</h4>
+                <p>选择上方的风格预设或输入自定义风格，会自动添加 &lt;style&gt; 标签。支持组合多种风格。</p>
+                <h4>音频标签细粒度控制</h4>
+                <p>直接在文本中使用括号标注语气、情绪等，例如：</p>
+                <ul>
+                  <li>（紧张，深呼吸）呼……冷静，冷静。</li>
+                  <li>（极其疲惫，有气无力）师傅……到地方了叫我一声……</li>
+                  <li>如果我当时……（沉默片刻）哪怕再坚持一秒钟……（苦笑）呵，没如果了。</li>
+                  <li>（提高音量喊话）大姐！这鱼新鲜着呢！</li>
+                </ul>
+                <h4>唱歌模式</h4>
+                <p>选择「唱歌」风格后直接输入歌词即可。</p>
+              </div>
+            </details>
+          </section>
+        </div>
+      ) : (
       <div className="page">
         <section className="workspace">
           <div className="workspace-header">
@@ -1045,6 +1375,7 @@ export default function App() {
           </div>
         </section>
       </div>
+      )}
     </>
   );
 }
