@@ -39,8 +39,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const payload = {
     model,
-    temperature: 0.3,
     max_tokens: 256,
+    reasoning_effort: "low",
     messages: [
       {
         role: "system",
@@ -70,7 +70,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (!response.ok) {
     const detail = await response.text();
-    return json({ error: "豆包接口请求失败。", detail }, 502);
+    let errorMsg = `豆包接口请求失败（${response.status}）`;
+    try {
+      const err = JSON.parse(detail);
+      if (err?.error?.message) errorMsg += `：${err.error.message}`;
+    } catch {}
+    return json({ error: errorMsg, detail }, 502);
   }
 
   const data = await response.json().catch(() => null);
