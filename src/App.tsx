@@ -229,6 +229,22 @@ const DownloadIcon = () => (
   </svg>
 );
 
+const WandIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+    <path d="M15 4V2" />
+    <path d="M15 16v-2" />
+    <path d="M8 9h2" />
+    <path d="M20 9h2" />
+    <path d="M17.8 11.8L19 13" />
+    <path d="M15 9h0" />
+    <path d="M17.8 6.2L19 5" />
+    <path d="M11 6.2L9.7 5" />
+    <path d="M11 11.8L9.7 13" />
+    <path d="M8 21l8.5-8.5" />
+    <path d="M2.5 15.5l2-2" />
+  </svg>
+);
+
 export default function App() {
   const [page, setPage] = useState<Page>("todo");
   const [todos, setTodos] = useState<Todo[]>(() => loadTodos());
@@ -271,6 +287,7 @@ export default function App() {
   const [ttsPagePlaying, setTtsPagePlaying] = useState(false);
   const ttsPageAudioRef = useRef<HTMLAudioElement | null>(null);
   const [ttsPageAudioUrl, setTtsPageAudioUrl] = useState<string | null>(null);
+  const [ttsEnhanceLoading, setTtsEnhanceLoading] = useState(false);
 
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
@@ -758,6 +775,52 @@ export default function App() {
     a.click();
   };
 
+  const handleTtsEnhance = async () => {
+    const text = ttsPageText.trim();
+    if (!text || ttsEnhanceLoading) return;
+
+    setTtsEnhanceLoading(true);
+    setTtsPageError("");
+
+    try {
+      const payload: Record<string, unknown> = { text };
+      const trimmedKey = apiKey.trim();
+      if (trimmedKey) {
+        payload.apiKey = trimmedKey;
+      }
+
+      const response = await fetch("/api/tts-enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      let data: Record<string, unknown> | null = null;
+      if (contentType.includes("application/json")) {
+        data = await response.json().catch(() => null);
+      }
+
+      if (!response.ok) {
+        if (!data) {
+          throw new Error(`AI 标注失败（${response.status}）。请确认后端已正确部署。`);
+        }
+        const msg = typeof data.error === "string" ? data.error : `AI 标注失败（${response.status}）`;
+        throw new Error(msg);
+      }
+
+      if (typeof data?.enhanced === "string") {
+        setTtsPageText(data.enhanced as string);
+      } else {
+        throw new Error("AI 未返回有效的标注文本。");
+      }
+    } catch (error) {
+      setTtsPageError(error instanceof Error ? error.message : "AI 标注失败。");
+    } finally {
+      setTtsEnhanceLoading(false);
+    }
+  };
+
   const emptyMessage =
     totalCount === 0
       ? "还没有任务。先在上方添加第一件事项。"
@@ -1071,7 +1134,22 @@ export default function App() {
 
             {/* Text Input */}
             <div className="tts-section">
-              <label className="tts-section-label">合成文本 <span className="tts-hint">支持音频标签细粒度控制</span></label>
+              <div className="tts-section-label-row">
+                <label className="tts-section-label">合成文本 <span className="tts-hint">支持音频标签细粒度控制</span></label>
+                <button
+                  type="button"
+                  className="tts-enhance-btn"
+                  onClick={handleTtsEnhance}
+                  disabled={!ttsPageText.trim() || ttsEnhanceLoading}
+                  title="AI 自动添加音频标签（情绪、语气、动作等）"
+                >
+                  {ttsEnhanceLoading ? (
+                    <><span className="tts-loading" /> AI 标注中...</>
+                  ) : (
+                    <><WandIcon /> AI 智能标注</>
+                  )}
+                </button>
+              </div>
               <textarea
                 className="tts-textarea"
                 placeholder={"输入要合成的文字...\n\n音频标签示例：\n（紧张，深呼吸）呼……冷静，冷静。\n（极其疲惫，有气无力）师傅……到地方了叫我一声……"}
