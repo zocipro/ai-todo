@@ -2,11 +2,12 @@ import { FormEvent, useState } from "react";
 import { setAuth, type AuthUser } from "./auth";
 
 type Props = {
-  onClose: () => void;
   onSuccess: (user: AuthUser) => void;
+  onClose?: () => void;
+  mandatory?: boolean;
 };
 
-export default function AuthModal({ onClose, onSuccess }: Props) {
+export default function AuthModal({ onSuccess, onClose, mandatory }: Props) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,12 +45,22 @@ export default function AuthModal({ onClose, onSuccess }: Props) {
     }
   };
 
+  const handleOverlayClick = () => {
+    if (!mandatory && onClose) onClose();
+  };
+
   return (
-    <div className="auth-overlay" onClick={onClose}>
+    <div className="auth-overlay" onClick={handleOverlayClick}>
       <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="auth-close" onClick={onClose} aria-label="关闭">
-          ✕
-        </button>
+        {!mandatory && onClose ? (
+          <button className="auth-close" onClick={onClose} aria-label="关闭">
+            ✕
+          </button>
+        ) : null}
+
+        {mandatory ? (
+          <div className="auth-mandatory-hint">请先登录或注册以继续使用</div>
+        ) : null}
 
         <div className="auth-tabs">
           <button
