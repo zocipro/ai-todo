@@ -728,6 +728,27 @@ body {
   box-shadow: var(--btn-primary-shadow-hover);
 }
 
+.ai-smart-btn {
+  background: linear-gradient(135deg, var(--accent), #6366f1) !important;
+  font-size: 0.85rem !important;
+  white-space: nowrap;
+}
+
+.ai-smart-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.ai-smart-error {
+  font-size: 0.82rem;
+  color: #ef4444;
+  padding: 6px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
+}
+
 /* === Add Options Panel === */
 .add-options {
   display: flex;

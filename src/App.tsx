@@ -151,9 +151,6 @@ const isDueToday = (dateStr: string | null, done: boolean) => {
   return dateStr === todayStr;
 };
 
-const normalizeSuggestion = (value: string) =>
-  value.replace(/^[\s\-•\d\.\)\(]+/, "").replace(/\s+/g, " ").trim();
-
 const getTodayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -261,11 +258,8 @@ export default function App() {
   const [inputPriority, setInputPriority] = useState<Priority>("medium");
   const [inputTag, setInputTag] = useState<Tag>("其他");
   const [inputDueDate, setInputDueDate] = useState("");
-  const [aiInput, setAiInput] = useState("");
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState("");
-  const [aiStatus, setAiStatus] = useState("");
+  const [aiSmartLoading, setAiSmartLoading] = useState(false);
+  const [aiSmartError, setAiSmartError] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [doubaoModel, setDoubaoModel] = useState(() => {
@@ -419,57 +413,27 @@ export default function App() {
     e.preventDefault();
   };
 
-  const buildTodos = (items: string[]) => {
-    const existing = new Set(todos.map((todo) => todo.text));
-    const now = Date.now();
-    return items
-      .map((item) => normalizeSuggestion(item))
-      .filter(Boolean)
-      .filter((item) => !existing.has(item))
-      .map((text, index) => ({
-        id: createId(),
-        text,
-        done: false,
-        createdAt: now + index,
-        priority: "medium" as Priority,
-        tag: "其他" as Tag,
-        dueDate: null,
-      }));
-  };
+  const handleAiSmartAdd = async () => {
+    const rawText = input.trim();
+    if (!rawText || aiSmartLoading) return;
 
-  const handleAiGenerate = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const prompt = aiInput.trim();
-    if (!prompt || aiLoading) {
-      return;
-    }
-    setAiLoading(true);
-    setAiError("");
-    setAiStatus("正在生成任务建议...");
+    setAiSmartLoading(true);
+    setAiSmartError("");
 
     try {
       const trimmedKey = apiKey.trim();
-      const payload: Record<string, unknown> = { prompt, model: doubaoModel };
+      const payload: Record<string, unknown> = { prompt: rawText, model: doubaoModel };
       if (trimmedKey) {
         payload.apiKey = trimmedKey;
       }
 
       const response = await fetch("/api/ai-todo", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const rawText = await response.text();
-      let data: { tasks?: unknown; error?: unknown } | null = null;
-      if (rawText) {
-        try {
-          data = JSON.parse(rawText);
-        } catch {
-          data = null;
-        }
-      }
+
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
         const baseMessage =
@@ -481,64 +445,28 @@ export default function App() {
         throw new Error(hint ? `${baseMessage} ${hint}` : baseMessage);
       }
 
-      const tasks: unknown[] = Array.isArray(data?.tasks) ? data.tasks : [];
-      const cleaned = Array.from(
-        new Set(
-          tasks
-            .filter((task: unknown): task is string => typeof task === "string")
-            .map((task) => normalizeSuggestion(task))
-            .filter(Boolean)
-        )
-      ).slice(0, 12);
+      const title = typeof data?.title === "string" ? data.title.trim() : rawText;
+      const priority = (["high", "medium", "low"].includes(data?.priority) ? data.priority : "medium") as Priority;
+      const tag = (TAG_OPTIONS as readonly string[]).includes(data?.tag) ? (data.tag as Tag) : "其他" as Tag;
 
-      if (cleaned.length === 0) {
-        setAiSuggestions([]);
-        setAiStatus("未生成有效任务，请换个描述再试。");
-        return;
-      }
-
-      setAiSuggestions(cleaned);
-      setAiStatus(`已生成 ${cleaned.length} 条建议。`);
+      const nextTodo: Todo = {
+        id: createId(),
+        text: title,
+        done: false,
+        createdAt: Date.now(),
+        priority,
+        tag,
+        dueDate: inputDueDate || null,
+      };
+      setTodos((prev) => [nextTodo, ...prev]);
+      setInput("");
+      setInputDueDate("");
+      setShowAddOptions(false);
     } catch (error) {
-      setAiSuggestions([]);
-      setAiStatus("");
-      setAiError(error instanceof Error ? error.message : "AI 生成失败，请稍后重试。");
+      setAiSmartError(error instanceof Error ? error.message : "AI 整理失败，请稍后重试。");
     } finally {
-      setAiLoading(false);
+      setAiSmartLoading(false);
     }
-  };
-
-  const handleAiClearInput = () => {
-    setAiInput("");
-    setAiError("");
-    setAiStatus("");
-  };
-
-  const handleAddSuggestion = (task: string) => {
-    const nextTodos = buildTodos([task]);
-    if (nextTodos.length === 0) {
-      setAiStatus("该任务已在清单中。");
-      return;
-    }
-    setTodos((prev) => [...nextTodos, ...prev]);
-    setAiSuggestions((prev) => prev.filter((item) => item !== task));
-    setAiStatus("已添加 1 条到待办。");
-  };
-
-  const handleAddAllSuggestions = () => {
-    const nextTodos = buildTodos(aiSuggestions);
-    if (nextTodos.length === 0) {
-      setAiStatus("建议已存在于清单中。");
-      return;
-    }
-    setTodos((prev) => [...nextTodos, ...prev]);
-    setAiSuggestions([]);
-    setAiStatus(`已添加 ${nextTodos.length} 条到待办。`);
-  };
-
-  const handleClearSuggestions = () => {
-    setAiSuggestions([]);
-    setAiStatus("");
   };
 
   const handleSaveApiKey = () => {
@@ -692,10 +620,19 @@ export default function App() {
     }
   };
 
-  const handleTtsPageStyleToggle = (s: string) => {
-    setTtsPageStyles((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    );
+  const handleTtsPageStyleToggle = (s: string, category: string) => {
+    // Find all items in the same category
+    const group = TTS_STYLE_PRESETS.find((g) => g.category === category);
+    const siblings = group ? (group.items as readonly string[]) : [];
+
+    setTtsPageStyles((prev) => {
+      if (prev.includes(s)) {
+        // Deselect
+        return prev.filter((x) => x !== s);
+      }
+      // Remove any other selection from same category, then add this one
+      return [...prev.filter((x) => !siblings.includes(x)), s];
+    });
   };
 
   const handleTtsPageStop = () => {
@@ -850,7 +787,6 @@ export default function App() {
           ? "还没有已完成的任务。"
           : "没有匹配的任务。";
 
-  const aiInputReady = aiInput.trim().length > 0;
   const hasLocalKey = apiKey.trim().length > 0;
   const hasMimoKey = mimoKey.trim().length > 0;
 
@@ -929,7 +865,7 @@ export default function App() {
                 <div className="ai-header">
                   <div>
                     <h2>AI 任务助手</h2>
-                    <p>描述你的目标，AI 会拆解成可执行的待办清单。</p>
+                    <p>在首页输入自然语言，点击「AI 整理」自动生成规范任务。</p>
                   </div>
                   <span className="ai-badge">豆包大模型</span>
                 </div>
@@ -982,64 +918,6 @@ export default function App() {
                   </div>
                 </div>
 
-                <form className="ai-form" onSubmit={handleAiGenerate}>
-                  <textarea
-                    name="ai-task"
-                    placeholder="例如：筹备下周的产品发布会"
-                    value={aiInput}
-                    onChange={(event) => setAiInput(event.target.value)}
-                    maxLength={240}
-                    rows={3}
-                    aria-label="AI 任务描述"
-                  />
-                  <div className="ai-actions">
-                    <button type="submit" disabled={!aiInputReady || aiLoading}>
-                      {aiLoading ? "生成中..." : "AI 生成清单"}
-                    </button>
-                    <button type="button" className="ghost" onClick={handleAiClearInput}>
-                      清空输入
-                    </button>
-                    <span className="ai-status" role="status" aria-live="polite">
-                      {aiStatus}
-                    </span>
-                  </div>
-                </form>
-
-                {aiError ? (
-                  <div className="ai-error" role="alert">
-                    {aiError}
-                  </div>
-                ) : null}
-
-                {aiSuggestions.length > 0 ? (
-                  <div className="ai-suggestions">
-                    <div className="ai-suggestions-header">
-                      <span>AI 建议清单</span>
-                      <div className="ai-suggestions-actions">
-                        <button type="button" onClick={handleAddAllSuggestions}>
-                          全部添加
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost"
-                          onClick={handleClearSuggestions}
-                        >
-                          清空建议
-                        </button>
-                      </div>
-                    </div>
-                    <ul>
-                      {aiSuggestions.map((task) => (
-                        <li key={task} className="ai-suggestion">
-                          <span>{task}</span>
-                          <button type="button" onClick={() => handleAddSuggestion(task)}>
-                            添加
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
               </div>
 
               {/* TTS 语音合成设置 */}
@@ -1137,7 +1015,7 @@ export default function App() {
 
             {/* Style Presets */}
             <div className="tts-section">
-              <label className="tts-section-label">风格预设 <span className="tts-hint">可多选，组合使用</span></label>
+              <label className="tts-section-label">风格预设 <span className="tts-hint">每类选一个，组合使用</span></label>
               {TTS_STYLE_PRESETS.map((group) => (
                 <div key={group.category} className="tts-style-group">
                   <span className="tts-style-category">{group.category}</span>
@@ -1147,7 +1025,7 @@ export default function App() {
                         key={s}
                         type="button"
                         className={`tag-btn ${ttsPageStyles.includes(s) ? "selected" : ""}`}
-                        onClick={() => handleTtsPageStyleToggle(s)}
+                        onClick={() => handleTtsPageStyleToggle(s, group.category)}
                       >
                         {s}
                       </button>
@@ -1290,15 +1168,27 @@ export default function App() {
             <input
               type="text"
               name="task"
-              placeholder="添加今天想完成的任务"
+              placeholder="随便写点什么，AI 帮你整理成任务"
               value={input}
-              onChange={(event) => setInput(event.target.value)}
+              onChange={(event) => { setInput(event.target.value); setAiSmartError(""); }}
               onFocus={() => setShowAddOptions(true)}
-              maxLength={120}
+              maxLength={200}
               aria-label="新任务"
             />
+            <button
+              type="button"
+              className="ai-smart-btn"
+              disabled={!input.trim() || aiSmartLoading}
+              onClick={handleAiSmartAdd}
+              title="AI 整理并创建任务"
+            >
+              {aiSmartLoading ? "整理中..." : "AI 整理"}
+            </button>
             <button type="submit">添加</button>
           </form>
+          {aiSmartError ? (
+            <div className="ai-smart-error" role="alert">{aiSmartError}</div>
+          ) : null}
 
           {showAddOptions ? (
             <div className="add-options">
