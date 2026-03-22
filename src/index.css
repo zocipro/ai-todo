@@ -1615,6 +1615,7 @@ body {
 
 .tts-speak-btn,
 .tts-stop-btn,
+.tts-replay-btn,
 .tts-download-btn {
   display: flex;
   align-items: center;
@@ -1652,6 +1653,16 @@ body {
 
 .tts-stop-btn:hover {
   background: rgba(239, 68, 68, 0.25);
+}
+
+.tts-replay-btn {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-primary);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.tts-replay-btn:hover {
+  background: rgba(59, 130, 246, 0.22);
 }
 
 .tts-download-btn {
@@ -1796,6 +1807,7 @@ body {
 
   .tts-speak-btn,
   .tts-stop-btn,
+  .tts-replay-btn,
   .tts-download-btn {
     justify-content: center;
   }
