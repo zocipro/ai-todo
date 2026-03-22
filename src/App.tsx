@@ -436,13 +436,13 @@ export default function App() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const baseMessage =
-          typeof data?.error === "string" ? data.error : `请求失败（${response.status}）`;
-        const hint =
-          response.status === 404
-            ? "未检测到后端 /api/ai-todo，请使用 wrangler pages dev 或部署到 Cloudflare Pages。"
-            : "";
-        throw new Error(hint ? `${baseMessage} ${hint}` : baseMessage);
+        if (typeof data?.error === "string") {
+          throw new Error(data.error);
+        }
+        const hint = response.status === 404
+          ? " 未检测到后端 /api/ai-todo，请使用 wrangler pages dev 或部署到 Cloudflare Pages。"
+          : "";
+        throw new Error(`请求失败（${response.status}）${hint}`);
       }
 
       const title = typeof data?.title === "string" ? data.title.trim() : rawText;
