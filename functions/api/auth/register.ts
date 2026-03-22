@@ -1,4 +1,14 @@
-import { hashPassword, signJWT, json, validateEmail, type AuthUser } from "../../auth-utils";
+import {
+  hashPassword,
+  signJWT,
+  json,
+  validateEmail,
+  validatePassword,
+  checkRateLimit,
+  recordLoginAttempt,
+  getClientIP,
+  type AuthUser,
+} from "../../auth-utils";
 
 type Env = {
   DB: D1Database;
@@ -10,11 +20,8 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
   env,
 }) => {
   try {
-    if (!env.DB) {
-      return json({ error: "数据库未配置。请在 wrangler.jsonc 中绑定 D1 数据库，并执行 schema.sql 建表。" }, 500);
-    }
-    if (!env.JWT_SECRET) {
-      return json({ error: "JWT_SECRET 未配置。请在 .dev.vars 或 Cloudflare 控制台中设置。" }, 500);
+    if (!env.DB || !env.JWT_SECRET) {
+      return json({ error: "服务配置异常，请联系管理员。" }, 500);
     }
 
     const body = await request.json().catch(() => null);
@@ -24,16 +31,26 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
     if (!email || !validateEmail(email)) {
       return json({ error: "请输入有效的邮箱地址。" }, 400);
     }
-    if (password.length < 6) {
-      return json({ error: "密码至少需要 6 个字符。" }, 400);
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return json({ error: passwordError }, 400);
     }
 
-    // Check if email already exists
+    // Rate limit check (use IP only, no email for register)
+    const ip = getClientIP(request);
+    const rateCheck = await checkRateLimit(env.DB, ip, "");
+    if (!rateCheck.allowed) {
+      return json({ error: "操作过于频繁，请 15 分钟后再试。" }, 429);
+    }
+
+    // Check if email already exists — return generic error to prevent enumeration
     const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
       .bind(email)
       .first();
     if (existing) {
-      return json({ error: "该邮箱已被注册。" }, 409);
+      // Use same status code as other validation errors to prevent enumeration
+      return json({ error: "注册失败，请检查输入信息或稍后再试。" }, 400);
     }
 
     // Hash password and create user
@@ -46,15 +63,14 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
       .bind(id, email, hash, salt)
       .run();
 
+    // Record successful registration as a login attempt for rate limiting
+    await recordLoginAttempt(env.DB, ip, email, true);
+
     // Generate JWT
     const token = await signJWT({ id, email }, env.JWT_SECRET);
 
     return json({ token, user: { id, email } });
-  } catch (e: any) {
-    const detail = e?.message || String(e);
-    const msg = detail.includes("no such table")
-      ? "数据库表不存在，请先执行 schema.sql 建表。"
-      : `注册失败：${detail}`;
-    return json({ error: msg }, 500);
+  } catch {
+    return json({ error: "注册失败，请稍后再试。" }, 500);
   }
 };

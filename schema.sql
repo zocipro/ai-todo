@@ -29,3 +29,14 @@ CREATE TABLE IF NOT EXISTS user_settings (
   updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+-- Login attempt tracking for rate limiting & account lockout
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ip TEXT NOT NULL,
+  email TEXT NOT NULL DEFAULT '',
+  attempted_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  success INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip, attempted_at);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email, attempted_at);

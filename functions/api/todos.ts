@@ -83,7 +83,7 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
       .all<TodoRow>();
 
     return json({ todos: (results || []).map(rowToTodo) });
-  } catch (e: any) {
-    return json({ error: "同步失败。", detail: e?.message }, 500);
+  } catch {
+    return json({ error: "同步失败，请稍后再试。" }, 500);
   }
 };
