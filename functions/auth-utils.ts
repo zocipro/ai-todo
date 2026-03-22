@@ -107,6 +107,103 @@ export async function hashPassword(
   };
 }
 
+// --- Timing-safe comparison ---
+
+export async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const aBuf = encoder.encode(a);
+  const bBuf = encoder.encode(b);
+
+  // Import both as HMAC keys with a fixed key to get constant-time comparison
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new Uint8Array(32),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const [sigA, sigB] = await Promise.all([
+    crypto.subtle.sign("HMAC", key, aBuf),
+    crypto.subtle.sign("HMAC", key, bBuf),
+  ]);
+
+  const viewA = new Uint8Array(sigA);
+  const viewB = new Uint8Array(sigB);
+  if (viewA.length !== viewB.length) return false;
+  let diff = 0;
+  for (let i = 0; i < viewA.length; i++) diff |= viewA[i] ^ viewB[i];
+  return diff === 0;
+}
+
+// --- Rate limiting ---
+
+const RATE_LIMIT_WINDOW = 900; // 15 minutes in seconds
+const MAX_ATTEMPTS_PER_IP = 20; // per IP in the window
+const MAX_ATTEMPTS_PER_EMAIL = 5; // per email (account lockout)
+
+export async function checkRateLimit(
+  db: D1Database,
+  ip: string,
+  email: string
+): Promise<{ allowed: boolean; retryAfter?: number }> {
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = now - RATE_LIMIT_WINDOW;
+
+  try {
+    // Check IP-based rate limit
+    const ipCount = await db
+      .prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND attempted_at > ?")
+      .bind(ip, windowStart)
+      .first<{ cnt: number }>();
+
+    if (ipCount && ipCount.cnt >= MAX_ATTEMPTS_PER_IP) {
+      return { allowed: false, retryAfter: RATE_LIMIT_WINDOW };
+    }
+
+    // Check email-based lockout (only failed attempts)
+    if (email) {
+      const emailCount = await db
+        .prepare(
+          "SELECT COUNT(*) as cnt FROM login_attempts WHERE email = ? AND attempted_at > ? AND success = 0"
+        )
+        .bind(email, windowStart)
+        .first<{ cnt: number }>();
+
+      if (emailCount && emailCount.cnt >= MAX_ATTEMPTS_PER_EMAIL) {
+        return { allowed: false, retryAfter: RATE_LIMIT_WINDOW };
+      }
+    }
+
+    return { allowed: true };
+  } catch {
+    // If the table doesn't exist yet, allow the request (graceful degradation)
+    return { allowed: true };
+  }
+}
+
+export async function recordLoginAttempt(
+  db: D1Database,
+  ip: string,
+  email: string,
+  success: boolean
+): Promise<void> {
+  try {
+    await db
+      .prepare("INSERT INTO login_attempts (ip, email, attempted_at, success) VALUES (?, ?, unixepoch(), ?)")
+      .bind(ip, email, success ? 1 : 0)
+      .run();
+
+    // Clean up old records (older than 1 hour) periodically
+    if (Math.random() < 0.05) {
+      const cutoff = Math.floor(Date.now() / 1000) - 3600;
+      await db.prepare("DELETE FROM login_attempts WHERE attempted_at < ?").bind(cutoff).run();
+    }
+  } catch {
+    // Non-critical — don't break auth if logging fails
+  }
+}
+
 // --- Helpers ---
 
 export const json = (data: unknown, status = 200) =>
@@ -117,4 +214,21 @@ export const json = (data: unknown, status = 200) =>
 
 export function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export function validatePassword(password: string): string | null {
+  if (password.length < 8) return "密码至少需要 8 个字符。";
+  if (!/[a-zA-Z]/.test(password) && !/[\u4e00-\u9fff]/.test(password))
+    return "密码需要包含至少一个字母。";
+  if (!/[0-9]/.test(password) && !/[^a-zA-Z0-9\s]/.test(password))
+    return "密码需要包含至少一个数字或特殊字符。";
+  return null;
+}
+
+export function getClientIP(request: Request): string {
+  return (
+    request.headers.get("CF-Connecting-IP") ||
+    request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
+    "unknown"
+  );
 }

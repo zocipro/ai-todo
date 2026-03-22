@@ -1,4 +1,13 @@
-import { hashPassword, signJWT, json, type AuthUser } from "../../auth-utils";
+import {
+  hashPassword,
+  signJWT,
+  json,
+  timingSafeEqual,
+  checkRateLimit,
+  recordLoginAttempt,
+  getClientIP,
+  type AuthUser,
+} from "../../auth-utils";
 
 type Env = {
   DB: D1Database;
@@ -10,11 +19,8 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
   env,
 }) => {
   try {
-    if (!env.DB) {
-      return json({ error: "数据库未配置。请在 wrangler.jsonc 中绑定 D1 数据库。" }, 500);
-    }
-    if (!env.JWT_SECRET) {
-      return json({ error: "JWT_SECRET 未配置。请在 .dev.vars 或 Cloudflare 控制台中设置。" }, 500);
+    if (!env.DB || !env.JWT_SECRET) {
+      return json({ error: "服务配置异常，请联系管理员。" }, 500);
     }
 
     const body = await request.json().catch(() => null);
@@ -25,6 +31,16 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
       return json({ error: "请输入邮箱和密码。" }, 400);
     }
 
+    // Rate limit check
+    const ip = getClientIP(request);
+    const rateCheck = await checkRateLimit(env.DB, ip, email);
+    if (!rateCheck.allowed) {
+      return json(
+        { error: "登录尝试次数过多，请 15 分钟后再试。" },
+        429
+      );
+    }
+
     // Look up user
     const row = await env.DB.prepare(
       "SELECT id, email, password_hash, salt FROM users WHERE email = ?"
@@ -33,24 +49,29 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
       .first<{ id: string; email: string; password_hash: string; salt: string }>();
 
     if (!row) {
+      // Record failed attempt, then do a dummy hash to prevent timing attacks
+      await recordLoginAttempt(env.DB, ip, email, false);
+      await hashPassword("dummy-password-for-timing", "dW1tbXktc2FsdA");
       return json({ error: "邮箱或密码错误。" }, 401);
     }
 
-    // Verify password
+    // Verify password with timing-safe comparison
     const { hash } = await hashPassword(password, row.salt);
-    if (hash !== row.password_hash) {
+    const passwordMatch = await timingSafeEqual(hash, row.password_hash);
+
+    if (!passwordMatch) {
+      await recordLoginAttempt(env.DB, ip, email, false);
       return json({ error: "邮箱或密码错误。" }, 401);
     }
+
+    // Success — record and clear lockout concern
+    await recordLoginAttempt(env.DB, ip, email, true);
 
     // Generate JWT
     const token = await signJWT({ id: row.id, email: row.email }, env.JWT_SECRET);
 
     return json({ token, user: { id: row.id, email: row.email } });
-  } catch (e: any) {
-    const detail = e?.message || String(e);
-    const msg = detail.includes("no such table")
-      ? "数据库表不存在，请先执行 schema.sql 建表。"
-      : `登录失败：${detail}`;
-    return json({ error: msg }, 500);
+  } catch {
+    return json({ error: "登录失败，请稍后再试。" }, 500);
   }
 };

@@ -55,7 +55,7 @@ export const onRequestPost: PagesFunction<Env, string, { user: AuthUser | null }
       .run();
 
     return json({ settings: merged });
-  } catch (e: any) {
-    return json({ error: "保存设置失败。", detail: e?.message }, 500);
+  } catch {
+    return json({ error: "保存设置失败，请稍后再试。" }, 500);
   }
 };

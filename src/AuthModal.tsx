@@ -103,11 +103,11 @@ export default function AuthModal({ onSuccess, onClose, mandatory }: Props) {
             <input
               id="auth-password"
               type="password"
-              placeholder={mode === "register" ? "至少 6 个字符" : "输入密码"}
+              placeholder={mode === "register" ? "至少 8 个字符，含字母+数字" : "输入密码"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={mode === "register" ? 6 : undefined}
+              minLength={mode === "register" ? 8 : undefined}
               autoComplete={mode === "login" ? "current-password" : "new-password"}
             />
           </div>
