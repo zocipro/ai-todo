@@ -672,9 +672,31 @@ export default function App() {
   const handleTtsPageStop = () => {
     if (ttsPageAudioRef.current) {
       ttsPageAudioRef.current.pause();
-      ttsPageAudioRef.current = null;
+      ttsPageAudioRef.current.currentTime = 0;
     }
     setTtsPagePlaying(false);
+  };
+
+  const handleTtsPageReplay = async () => {
+    if (!ttsPageAudioUrl) return;
+    handleTtsPageStop();
+    const audio = new Audio(ttsPageAudioUrl);
+    ttsPageAudioRef.current = audio;
+    setTtsPagePlaying(true);
+    setTtsPageError("");
+    audio.onended = () => {
+      setTtsPagePlaying(false);
+    };
+    audio.onerror = () => {
+      setTtsPagePlaying(false);
+      setTtsPageError("音频播放失败。");
+    };
+    try {
+      await audio.play();
+    } catch {
+      setTtsPagePlaying(false);
+      setTtsPageError("音频播放失败。");
+    }
   };
 
   const handleTtsPageSpeak = async () => {
@@ -742,11 +764,9 @@ export default function App() {
 
       audio.onended = () => {
         setTtsPagePlaying(false);
-        ttsPageAudioRef.current = null;
       };
       audio.onerror = () => {
         setTtsPagePlaying(false);
-        ttsPageAudioRef.current = null;
         setTtsPageError("音频播放失败。");
       };
 
@@ -1173,6 +1193,10 @@ export default function App() {
               {ttsPagePlaying ? (
                 <button type="button" className="tts-stop-btn" onClick={handleTtsPageStop}>
                   <StopIcon /> 停止播放
+                </button>
+              ) : ttsPageAudioUrl ? (
+                <button type="button" className="tts-replay-btn" onClick={handleTtsPageReplay}>
+                  <SpeakerIcon /> 重新播放
                 </button>
               ) : null}
               {ttsPageAudioUrl ? (
