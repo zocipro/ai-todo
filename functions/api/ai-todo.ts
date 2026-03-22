@@ -5,7 +5,7 @@ type Env = {
   ARK_API_KEY?: string;
 };
 
-const DEFAULT_MODEL = "doubao-seed-1-8-251228";
+const DEFAULT_MODEL = "Doubao-Seed-2.0-lite";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {

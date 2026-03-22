@@ -5,7 +5,7 @@ type Env = {
   ARK_API_KEY?: string;
 };
 
-const DEFAULT_MODEL = "doubao-seed-1-8-251228";
+const DEFAULT_MODEL = "Doubao-Seed-2.0-lite";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -33,6 +33,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = await request.json().catch(() => null);
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   const providedKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
+  const providedModel = typeof body?.model === "string" ? body.model.trim() : "";
 
   if (!text) {
     return json({ error: "请提供要标注的文本。" }, 400);
@@ -43,7 +44,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: "请在设置中填写豆包 API Key 或配置 DOUBAO_API_KEY 环境变量。" }, 400);
   }
 
-  const model = env.DOUBAO_MODEL || DEFAULT_MODEL;
+  const model = providedModel || env.DOUBAO_MODEL || DEFAULT_MODEL;
   const baseUrl = (env.DOUBAO_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3")
     .replace(/\/+$/, "");
 
