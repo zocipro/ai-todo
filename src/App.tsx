@@ -245,6 +245,8 @@ export default function App() {
   const ttsPageAudioRef = useRef<HTMLAudioElement | null>(null);
   const [ttsPageAudioUrl, setTtsPageAudioUrl] = useState<string | null>(null);
   const [ttsEnhanceLoading, setTtsEnhanceLoading] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const avatarMenuRef = useRef<HTMLDivElement>(null);
 
   // Auth state — mandatory login, no offline mode
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -260,6 +262,17 @@ export default function App() {
       syncSettingsToCloud({ theme });
     }
   }, [theme]);
+
+  useEffect(() => {
+    if (!avatarMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target as Node)) {
+        setAvatarMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [avatarMenuOpen]);
 
   // On mount: validate token, load cloud data, or show login
   useEffect(() => {
@@ -874,17 +887,7 @@ export default function App() {
       <nav className="navbar">
         <div className="nav-container">
           <div className="nav-logo">
-            <svg viewBox="0 0 64 64" fill="none">
-              <rect width="64" height="64" rx="14" fill="currentColor" opacity="0.15" />
-              <path
-                d="M18 34l10 10 18-22"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <img src="/logo.png" alt="AI 待办" className="nav-logo-img" />
             <span>AI 待办</span>
           </div>
           <div className="nav-tabs">
@@ -904,18 +907,6 @@ export default function App() {
             </button>
           </div>
           <div className="nav-right">
-            <div className="user-info">
-              <span className="user-email" title={authUser.email}>
-                {authUser.email.split("@")[0]}
-              </span>
-              <button className="theme-toggle" onClick={handleLogout} aria-label="退出登录" title="退出登录">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-              </button>
-            </div>
             <button
               className="theme-toggle"
               onClick={() => setSettingsOpen(true)}
@@ -931,6 +922,30 @@ export default function App() {
               <SunIcon />
               <MoonIcon />
             </button>
+            <div className="avatar-wrapper" ref={avatarMenuRef}>
+              <button
+                className="user-avatar"
+                onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
+                title={authUser.email}
+              >
+                {authUser.email.charAt(0).toUpperCase()}
+              </button>
+              {avatarMenuOpen && (
+                <div className="avatar-menu">
+                  <div className="avatar-menu-header">
+                    <div className="avatar-menu-avatar">
+                      {authUser.email.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="avatar-menu-email">{authUser.email}</div>
+                  </div>
+                  <div className="avatar-menu-divider" />
+                  <button className="avatar-menu-item" onClick={() => { setAvatarMenuOpen(false); handleLogout(); }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+                    退出登录
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </nav>
